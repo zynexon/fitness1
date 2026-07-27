@@ -1,0 +1,249 @@
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+
+import branding from '../../config/branding'
+
+function CoachClientDetailPage({ authedFetch }) {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [client, setClient] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  
+  const [noteInput, setNoteInput] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+  
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskCategory, setTaskCategory] = useState('general')
+  const [taskDate, setTaskDate] = useState('')
+  const [assigningTask, setAssigningTask] = useState(false)
+
+  const fetchClient = async () => {
+    try {
+      const data = await authedFetch(`/api/coach/clients/${id}/`)
+      setClient(data)
+      setNoteInput(data.coach_note || '')
+    } catch (err) {
+      setError(err.message || 'Failed to fetch client details.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchClient()
+  }, [id])
+
+  const handleSaveNote = async () => {
+    setSavingNote(true)
+    try {
+      await authedFetch(`/api/coach/clients/${id}/note/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ note: noteInput }),
+      })
+      alert('Note saved!')
+    } catch (err) {
+      alert(err.message || 'Error saving note.')
+    } finally {
+      setSavingNote(false)
+    }
+  }
+
+  const handleAssignTask = async (e) => {
+    e.preventDefault()
+    if (!taskTitle) return
+    setAssigningTask(true)
+    try {
+      await authedFetch(`/api/coach/clients/${id}/tasks/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: taskTitle,
+          category: taskCategory,
+          date: taskDate || null
+        }),
+      })
+      alert('Task assigned!')
+      setTaskTitle('')
+      fetchClient()
+    } catch (err) {
+      alert(err.message || 'Error assigning task.')
+    } finally {
+      setAssigningTask(false)
+    }
+  }
+
+  if (loading) return <div className="p-12 text-center text-sm font-bold text-zinc-400">Loading client...</div>
+  if (error || !client) return <div className="p-12 text-center text-sm font-bold text-red-400">{error || 'Not found'}</div>
+
+  const riskColors = {
+    at_risk: 'bg-red-500/10 text-red-500 border-red-500/20',
+    slipping: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+    on_track: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  }
+  const riskLabels = {
+    at_risk: 'At Risk',
+    slipping: 'Slipping',
+    on_track: 'On Track',
+  }
+
+  return (
+    <div className="space-y-6 pb-12">
+      <div className="flex items-center gap-4">
+        <button onClick={() => navigate('/coach/clients')} className="text-zinc-400 hover:text-zinc-900 transition">
+          ← Back
+        </button>
+        <div>
+          <h1 className="text-2xl font-black text-zinc-900 tracking-tight">{client.name}</h1>
+          <p className="text-sm font-semibold text-zinc-500">{client.email}</p>
+        </div>
+        <div className={`ml-auto px-3 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider ${riskColors[client.risk_level]}`}>
+          {riskLabels[client.risk_level]}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Col */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">Adherence</p>
+              <p className="text-2xl font-black text-zinc-900">{client.week_adherence_pct}%</p>
+            </div>
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">Streak</p>
+              <p className="text-2xl font-black text-zinc-900">{client.streak}d</p>
+            </div>
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">Level</p>
+              <p className="text-2xl font-black text-zinc-900">{client.level}</p>
+            </div>
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">Last Active</p>
+              <p className="text-sm font-bold text-zinc-900 mt-2">{client.last_active_date || 'Never'}</p>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 md:p-8">
+            <h2 className="text-lg font-black text-zinc-900 mb-4">Assign Task</h2>
+            <form onSubmit={handleAssignTask} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-zinc-500">Task Title</label>
+                <input
+                  type="text"
+                  required
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  placeholder="e.g., Run 5km"
+                  className="w-full rounded-2xl border-2 border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-bold text-zinc-950 outline-none transition focus:border-zinc-900 focus:bg-white"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-zinc-500">Category</label>
+                  <select
+                    value={taskCategory}
+                    onChange={(e) => setTaskCategory(e.target.value)}
+                    className="w-full rounded-2xl border-2 border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-bold text-zinc-950 outline-none transition focus:border-zinc-900 focus:bg-white"
+                  >
+                    <option value="fitness">Fitness</option>
+                    <option value="study">Study</option>
+                    <option value="discipline">Discipline</option>
+                    <option value="work">Work</option>
+                    <option value="logic">Logic</option>
+                    <option value="general">General</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-zinc-500">Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={taskDate}
+                    onChange={(e) => setTaskDate(e.target.value)}
+                    className="w-full rounded-2xl border-2 border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-bold text-zinc-950 outline-none transition focus:border-zinc-900 focus:bg-white"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={assigningTask}
+                className="w-full rounded-2xl bg-zinc-950 px-4 py-3.5 text-sm font-black uppercase tracking-wider text-white transition hover:bg-zinc-800 disabled:opacity-50"
+              >
+                {assigningTask ? 'Assigning...' : 'Assign Task'}
+              </button>
+            </form>
+          </div>
+          
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 md:p-8">
+            <h2 className="text-lg font-black text-zinc-900 mb-4">Today's Tasks</h2>
+            {client.tasks && client.tasks.length > 0 ? (
+              <ul className="space-y-3">
+                {client.tasks.map(t => (
+                  <li key={t.id} className="flex items-center gap-3 p-3 rounded-2xl border border-zinc-100 bg-zinc-50">
+                    <div className={`w-5 h-5 rounded-md flex items-center justify-center ${t.completed ? 'bg-emerald-500 text-white' : 'bg-zinc-200'}`}>
+                      {t.completed && '✓'}
+                    </div>
+                    <span className={`text-sm font-bold ${t.completed ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}>
+                      {t.task_title || t.task?.title || t.custom_title || t.title}
+                    </span>
+                    {t.is_custom && (
+                      <span className="ml-auto text-[10px] font-black uppercase tracking-wider text-blue-500 bg-blue-50 px-2 py-1 rounded-lg">Coach</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm font-bold text-zinc-400">No tasks for today.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Right Col */}
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6">
+            <h2 className="text-lg font-black text-zinc-900 mb-4">Coach Notes</h2>
+            <textarea
+              value={noteInput}
+              onChange={(e) => setNoteInput(e.target.value)}
+              placeholder="Private notes about this client..."
+              className="w-full h-48 rounded-2xl border-2 border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-900 outline-none transition focus:border-zinc-900 focus:bg-white resize-none mb-4"
+            />
+            <button
+              onClick={handleSaveNote}
+              disabled={savingNote}
+              className="w-full rounded-2xl bg-zinc-100 border border-zinc-200 px-4 py-3 text-sm font-black uppercase tracking-wider text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50"
+            >
+              {savingNote ? 'Saving...' : 'Save Notes'}
+            </button>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6">
+            <h2 className="text-lg font-black text-zinc-900 mb-4">Weekly Report</h2>
+            {client.weekly_report ? (
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-zinc-500">Grade</span>
+                  <span className="font-black text-zinc-900">{client.weekly_report.grade}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-zinc-500">Score</span>
+                  <span className="font-black text-zinc-900">{client.weekly_report.performance_score}/100</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-zinc-500">Active Days</span>
+                  <span className="font-black text-zinc-900">{client.weekly_report.active_days}/7</span>
+                </div>
+                <p className="text-xs font-semibold text-zinc-500 mt-4 italic">
+                  "{client.weekly_report.verdict}"
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs font-semibold text-zinc-400">No report available yet.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default CoachClientDetailPage

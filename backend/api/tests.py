@@ -208,3 +208,96 @@ class FocusCategoryTaskAssignmentTests(TestCase):
 		self.assertEqual(len(completed_after), 1)
 		self.assertEqual(str(completed_after[0].id), str(completed_task.id))
 		self.assertTrue(all(task.task.category == "study" for task in incomplete_after))
+
+from .models import CoachInvite, User
+
+class CoachClientTests(TestCase):
+    def setUp(self):
+        self.coach_email = 'coach@example.com'
+        self.coach = get_user_model().objects.create_user(
+            username=self.coach_email,
+            email=self.coach_email,
+            password='Password123!',
+            name='The Coach',
+            is_coach=True,
+        )
+        self.invite = CoachInvite.objects.create(coach=self.coach, code='INVITE123')
+        self.register_url = reverse('auth-register')
+
+    def test_register_with_valid_invite_code_sets_coach(self):
+        response = self.client.post(
+            self.register_url,
+            data=json.dumps({
+                'name': 'Client One',
+                'email': 'client1@example.com',
+                'password': 'Password123!',
+                'invite_code': 'INVITE123',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(email='client1@example.com')
+        self.assertEqual(user.coach, self.coach)
+        self.invite.refresh_from_db()
+        self.assertEqual(self.invite.use_count, 1)
+
+    def test_register_without_invite_code_fails(self):
+        response = self.client.post(
+            self.register_url,
+            data=json.dumps({
+                'name': 'Client Two',
+                'email': 'client2@example.com',
+                'password': 'Password123!',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(email='client2@example.com').exists())
+
+    def test_register_with_invalid_invite_code_fails(self):
+        response = self.client.post(
+            self.register_url,
+            data=json.dumps({
+                'name': 'Client Three',
+                'email': 'client3@example.com',
+                'password': 'Password123!',
+                'invite_code': 'BADC0DE',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(email='client3@example.com').exists())
+
+    def test_coach_excluded_from_leaderboard(self):
+        # Give coach some XP
+        self.coach.xp = 1000
+        self.coach.save()
+        
+        from .services import get_leaderboard
+        _, _, total_users = get_leaderboard(period="all_time")
+        # Coach should not be in leaderboard
+        self.assertEqual(total_users, 0)
+        
+        # Give client XP
+        client = get_user_model().objects.create_user(
+            username='c@test.com',
+            email='c@test.com',
+            password='P',
+            name='C',
+            xp=500
+        )
+        entries, _, total_users = get_leaderboard(period="all_time")
+        self.assertEqual(total_users, 1)
+        self.assertEqual(entries[0]['email'], 'c@test.com')
+
+    def test_coach_endpoints_return_403_for_non_coach(self):
+        from rest_framework.test import APIClient
+        client_user = get_user_model().objects.create_user(
+            username='client@example.com',
+            email='client@example.com',
+            password='Password123!',
+        )
+        api_client = APIClient()
+        api_client.force_authenticate(user=client_user)
+        response = api_client.get(reverse('coach-clients'))
+        self.assertEqual(response.status_code, 403)

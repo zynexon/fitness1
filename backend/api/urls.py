@@ -37,6 +37,14 @@ from .views import (
     UpdateNameView,
     UserView,
     WeeklyWarReportView,
+    CoachInviteView,
+    CoachInviteRegenerateView,
+    CoachInvitePreviewView,
+    CoachClientListView,
+    CoachClientDetailView,
+    CoachClientNoteView,
+    CoachClientTaskCreateView,
+    CoachClientTaskHistoryView,
 )
 
 urlpatterns = [
@@ -79,4 +87,13 @@ urlpatterns = [
     path("leaderboard/prestige/", PrestigeLeaderboardView.as_view(), name="leaderboard-prestige"),
     path("weekly-report/", WeeklyWarReportView.as_view(), name="weekly-report"),
     path("push/subscribe/", PushSubscriptionView.as_view(), name="push-subscribe"),
+    # ── Coach endpoints ──
+    path("coach/invite/", CoachInviteView.as_view(), name="coach-invite"),
+    path("coach/invite/regenerate/", CoachInviteRegenerateView.as_view(), name="coach-invite-regenerate"),
+    path("coach/invite/<str:code>/preview/", CoachInvitePreviewView.as_view(), name="coach-invite-preview"),
+    path("coach/clients/", CoachClientListView.as_view(), name="coach-clients"),
+    path("coach/clients/<uuid:client_id>/", CoachClientDetailView.as_view(), name="coach-client-detail"),
+    path("coach/clients/<uuid:client_id>/note/", CoachClientNoteView.as_view(), name="coach-client-note"),
+    path("coach/clients/<uuid:client_id>/tasks/", CoachClientTaskCreateView.as_view(), name="coach-client-tasks"),
+    path("coach/clients/<uuid:client_id>/tasks/history/", CoachClientTaskHistoryView.as_view(), name="coach-client-tasks-history"),
 ]

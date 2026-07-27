@@ -818,7 +818,7 @@ def get_leaderboard(current_user=None, limit=20, period="weekly"):
         queryset=UserArtifact.objects.select_related("artifact").filter(is_equipped=True),
         to_attr="equipped_artifacts",
     )
-    users_query = User.objects.annotate(
+    users_query = User.objects.exclude(is_coach=True).annotate(
         recent_activity=Coalesce("last_active_date", date(1970, 1, 1), output_field=DateField()),
     )
     users_query = users_query.prefetch_related(equipped_artifacts)
@@ -843,7 +843,7 @@ def get_leaderboard(current_user=None, limit=20, period="weekly"):
         ).order_by("-weekly_xp", "-streak", "-recent_activity", "created_at")
 
         previous_users = list(
-            User.objects.annotate(
+            User.objects.exclude(is_coach=True).annotate(
                 recent_activity=Coalesce("last_active_date", date(1970, 1, 1), output_field=DateField()),
             )
             .annotate(
@@ -937,6 +937,7 @@ def get_prestige_leaderboard(current_user=None, limit=50):
 
     users_query = (
         User.objects.filter(prestige_level__gt=0)
+        .exclude(is_coach=True)
         .prefetch_related(prestige_artifacts, equipped_artifacts)
         .annotate(
             recent_activity=Coalesce(
@@ -1123,3 +1124,62 @@ def get_user_stats(user):
         "full_war_sessions": full_war_sessions,
         "journal_entries": journal_count,
     }
+
+
+def get_current_week_window(reference_date=None):
+    today = reference_date or timezone.localdate()
+    days_since_sunday = (today.weekday() + 1) % 7
+    week_end_date = today - timedelta(days=days_since_sunday)
+    week_start_date = week_end_date - timedelta(days=6)
+    return week_start_date, week_end_date
+
+
+def get_week_adherence(user, week_start_date=None):
+    if not week_start_date:
+        week_start_date, _ = get_current_week_window()
+    week_end_date = week_start_date + timedelta(days=6)
+    
+    tasks = UserTask.objects.filter(
+        user=user,
+        date__gte=week_start_date,
+        date__lte=week_end_date
+    )
+    assigned = tasks.count()
+    completed = tasks.filter(completed=True).count()
+    
+    pct = round((completed / assigned * 100) if assigned > 0 else 0)
+    return {"completed": completed, "assigned": assigned, "pct": pct}
+
+
+def get_active_dates(user, since_days=28):
+    today = timezone.localdate()
+    start_date = today - timedelta(days=since_days - 1)
+    
+    active_dates_list = list(
+        UserTask.objects.filter(
+            user=user, 
+            completed=True, 
+            date__gte=start_date, 
+            date__lte=today
+        ).values_list("date", flat=True).distinct()
+    )
+    return [d.isoformat() for d in active_dates_list]
+
+
+def compute_client_risk_level(user):
+    today = timezone.localdate()
+    days_since_active = (today - user.last_active_date).days if user.last_active_date else 999
+    
+    adherence = get_week_adherence(user)
+    current_pct = adherence["pct"]
+    
+    if days_since_active >= 3 or current_pct < 40:
+        return "at_risk"
+    
+    if 1 <= days_since_active <= 2:
+        prev_week_start, _ = get_current_week_window(reference_date=today - timedelta(days=7))
+        prev_adherence = get_week_adherence(user, week_start_date=prev_week_start)
+        if current_pct < prev_adherence["pct"]:
+            return "slipping"
+            
+    return "on_track"

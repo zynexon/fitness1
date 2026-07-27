@@ -1,6 +1,6 @@
 import branding, { interpolate } from '../../config/branding'
 
-function LandingPage({ onTryGame, onLogin, onRegister, activeWarriorsCount }) {
+function LandingPage({ onTryGame, onLogin, activeWarriorsCount }) {
   return (
     <main className="w-full max-w-[480px] md:max-w-3xl lg:max-w-5xl mx-auto pb-12">
 
@@ -348,18 +348,10 @@ function LandingPage({ onTryGame, onLogin, onRegister, activeWarriorsCount }) {
 
             <button
               type="button"
-              onClick={onRegister}
+              onClick={onLogin}
               className="mt-6 w-full rounded-2xl bg-white px-4 py-4 text-sm font-black uppercase tracking-wider text-zinc-950 transition hover:bg-zinc-100 active:scale-[0.98]"
             >
-              {branding.copyPack.landingPageCopy.finalCTAPrimary}
-            </button>
-
-            <button
-              type="button"
-              onClick={onLogin}
-              className="mt-3 w-full rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-bold text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
-            >
-              {interpolate(branding.copyPack.landingPageCopy.finalCTASecondary, { streakUnitLabel: branding.copyPack.streakUnitLabel })}
+              Log In to Continue
             </button>
 
             <p className="mt-5 text-[10px] font-semibold text-zinc-600">

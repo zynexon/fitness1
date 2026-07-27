@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import JoinCoachPage from './components/pages/JoinCoachPage'
+import CoachShell from './components/layout/CoachShell'
+import CoachRosterPage from './components/pages/CoachRosterPage'
+import CoachClientDetailPage from './components/pages/CoachClientDetailPage'
 import confetti from 'canvas-confetti'
 import ConfirmationModal from './components/ConfirmationModal'
 import AddTaskModal from './components/AddTaskModal'
@@ -812,6 +817,9 @@ function mapDailyTasksToUi(dailyTasks) {
 }
 
 function App() {
+  const location = useLocation()
+  const reactRouterNavigate = useNavigate()
+
   const {
     user,
     setUser,
@@ -2036,12 +2044,13 @@ function App() {
     setAuthMode,
   ])
 
-  async function handleAuthSubmit(event) {
+  async function handleAuthSubmit(event, inviteCode = null) {
     event.preventDefault()
     setAuthLoading(true)
     setErrorText('')
     setAuthNotice('')
-    const resolvedAuthMode = authMode === 'register_intent' ? 'register' : authMode
+    const targetMode = inviteCode ? 'register' : authMode
+    const resolvedAuthMode = targetMode === 'register_intent' ? 'register' : targetMode
 
     try {
       if (resolvedAuthMode === 'forgot_password') {
@@ -2145,14 +2154,25 @@ function App() {
       }
 
       if (resolvedAuthMode === 'register') {
+        const registerPayload = { name: nameInput, email: emailInput, password: passwordInput }
+        if (inviteCode) {
+          registerPayload.invite_code = inviteCode
+        }
         const registerResponse = await fetch(apiUrl('/api/auth/register/'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: nameInput, email: emailInput, password: passwordInput }),
+          body: JSON.stringify(registerPayload),
         })
         const registerData = await readApiPayload(registerResponse)
         if (!registerResponse.ok) {
-          throw new Error(registerData.name?.[0] || registerData.error || 'Registration failed.')
+          throw new Error(
+            registerData.invite_code?.[0] ||
+            registerData.name?.[0] ||
+            registerData.email?.[0] ||
+            registerData.detail ||
+            registerData.error ||
+            'Registration failed.'
+          )
         }
       }
 
@@ -2169,6 +2189,7 @@ function App() {
       persistTokens(loginData.access, loginData.refresh)
       hasLoadedRef.current = false
       setActiveTab('Home')
+      reactRouterNavigate('/')
       setGameRoute('/game')
       setPasswordInput('')
       setResetPasswordConfirmInput('')
@@ -3483,6 +3504,62 @@ function App() {
           }
         `}</style>
       </main>
+    )
+  }
+
+  if (location.pathname.startsWith('/coach')) {
+    if (!user || !user.is_coach) {
+      return (
+        <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-zinc-950 p-6 text-center text-white">
+          <p className="mb-4 font-bold text-zinc-300">Access denied. Coach account required.</p>
+          <button onClick={() => { reactRouterNavigate('/'); handleLogout() }} className="rounded-xl bg-white px-4 py-2 font-bold text-black">Return Home</button>
+        </div>
+      )
+    }
+
+    return (
+      <CoachShell
+        coachName={user.name}
+        onLogout={handleLogout}
+        activePage={location.pathname.includes('/clients/') ? 'clients' : 'dashboard'}
+        onNavigate={(key) => {
+          if (key === 'dashboard' || key === 'clients') reactRouterNavigate('/coach/clients')
+        }}
+      >
+        <Routes>
+          <Route path="/coach/clients/:id" element={<CoachClientDetailPage authedFetch={authedFetch} />} />
+          <Route path="/coach/clients" element={<CoachRosterPage authedFetch={authedFetch} />} />
+          <Route path="*" element={<CoachRosterPage authedFetch={authedFetch} />} />
+        </Routes>
+      </CoachShell>
+    )
+  }
+
+  if (location.pathname.startsWith('/join/')) {
+    if (user) {
+      reactRouterNavigate('/')
+    }
+    return (
+      <div className="min-h-[100dvh] bg-zinc-900 pb-12">
+        <Routes>
+          <Route path="/join/:code" element={
+            <JoinCoachPage 
+              activeWarriorsCount={totalPlayers}
+              handleAuthSubmit={handleAuthSubmit}
+              authLoading={authLoading}
+              errorText={errorText}
+              nameInput={nameInput}
+              setNameInput={setNameInput}
+              emailInput={emailInput}
+              setEmailInput={setEmailInput}
+              passwordInput={passwordInput}
+              setPasswordInput={setPasswordInput}
+              setAuthMode={setAuthMode}
+              authMode={authMode}
+            />
+          } />
+        </Routes>
+      </div>
     )
   }
 

@@ -4,6 +4,8 @@ import './index.css'
 import App from './App.jsx'
 import branding from './config/branding'
 
+import { BrowserRouter } from 'react-router-dom'
+
 // Inject brand-identity colors as CSS custom properties
 const root = document.documentElement
 root.style.setProperty('--brand-primary', branding.primaryColor)
@@ -12,7 +14,9 @@ root.style.setProperty('--brand-dark', branding.themeColorHex)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </StrictMode>,
 )
 

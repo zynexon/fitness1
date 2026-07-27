@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import JournalEntry, User, UserTask
+from .models import CoachInvite, JournalEntry, User, UserTask
 from .services import CUSTOM_TASK_PREFIX
 
 
@@ -93,6 +93,7 @@ class RegisterInputSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=30)
     email = serializers.EmailField()
     password = serializers.CharField(min_length=8, write_only=True)
+    invite_code = serializers.CharField(required=True, allow_blank=False)
 
     def validate_name(self, value):
         cleaned = value.strip()
@@ -190,6 +191,7 @@ class UserSerializer(serializers.ModelSerializer):
             "total_tasks_completed",
             "last_active_date",
             "created_at",
+            "is_coach",
         ]
 
 
@@ -232,3 +234,82 @@ class PushSubscriptionSerializer(serializers.Serializer):
     endpoint = serializers.CharField()
     p256dh = serializers.CharField()
     auth = serializers.CharField()
+
+
+class CoachInviteSerializer(serializers.ModelSerializer):
+    invite_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CoachInvite
+        fields = ["code", "invite_url", "is_active", "use_count", "created_at"]
+
+    def get_invite_url(self, obj):
+        return f"/join/{obj.code}"
+
+
+class ClientRosterSerializer(serializers.ModelSerializer):
+    days_since_active = serializers.SerializerMethodField()
+    week_adherence_pct = serializers.FloatField(read_only=True, default=0.0)
+    prev_week_adherence_pct = serializers.FloatField(read_only=True, default=0.0)
+    adherence_trend = serializers.CharField(read_only=True, default="stable")
+    risk_level = serializers.CharField(read_only=True, default="on_track")
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "name",
+            "email",
+            "streak",
+            "level",
+            "xp",
+            "last_active_date",
+            "days_since_active",
+            "week_adherence_pct",
+            "prev_week_adherence_pct",
+            "adherence_trend",
+            "risk_level",
+            "streak_shields",
+        ]
+
+    def get_days_since_active(self, obj):
+        if not obj.last_active_date:
+            return None
+        from django.utils.timezone import localdate
+        return (localdate() - obj.last_active_date).days
+
+
+class ClientDetailSerializer(ClientRosterSerializer):
+    weekly_report = serializers.DictField(read_only=True)
+    calendar = serializers.ListField(read_only=True)
+    journal_trend = serializers.ListField(read_only=True)
+    tasks = serializers.ListField(read_only=True)
+    coach_note = serializers.CharField(read_only=True)
+
+    class Meta(ClientRosterSerializer.Meta):
+        fields = ClientRosterSerializer.Meta.fields + [
+            "weekly_report",
+            "calendar",
+            "journal_trend",
+            "tasks",
+            "coach_note",
+        ]
+
+
+class CoachNoteInputSerializer(serializers.Serializer):
+    note = serializers.CharField(allow_blank=True)
+
+
+class CreateClientTaskInputSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255)
+    category = serializers.ChoiceField(
+        choices=["study", "fitness", "discipline", "work", "logic", "general"],
+        required=False,
+        default="general",
+    )
+    date = serializers.DateField(required=False)
+
+
+class ClientTaskHistoryQuerySerializer(serializers.Serializer):
+    date = serializers.DateField(required=False)
+    range = serializers.IntegerField(required=False, min_value=1, max_value=30, default=7)

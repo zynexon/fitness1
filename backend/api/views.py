@@ -19,7 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .models import Challenge, GameSession, JournalEntry, PushSubscription, Task, User, UserTask, XPLog
+from .models import Challenge, CoachInvite, GameSession, JournalEntry, PushSubscription, Task, User, UserTask, XPLog
 from .serializers import (
     AssignDailyTasksInputSerializer,
     CompleteTaskInputSerializer,
@@ -41,6 +41,12 @@ from .serializers import (
     UpdateNameInputSerializer,
     UserSerializer,
     UserTaskSerializer,
+    CoachInviteSerializer,
+    ClientRosterSerializer,
+    ClientDetailSerializer,
+    CoachNoteInputSerializer,
+    CreateClientTaskInputSerializer,
+    ClientTaskHistoryQuerySerializer,
 )
 from .services import (
     award_shield_for_perfect_week,
@@ -351,6 +357,19 @@ class RegisterView(APIView):
         name = serializer.validated_data["name"]
         email = serializer.validated_data["email"].lower().strip()
         password = serializer.validated_data["password"]
+        invite_code = serializer.validated_data.get("invite_code")
+
+        try:
+            invite = CoachInvite.objects.get(code=invite_code, is_active=True)
+            if invite.expires_at and invite.expires_at < timezone.now():
+                raise CoachInvite.DoesNotExist
+            if invite.max_uses and invite.use_count >= invite.max_uses:
+                raise CoachInvite.DoesNotExist
+        except CoachInvite.DoesNotExist:
+            return Response(
+                {"error": "A valid invite link is required to create an account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if User.objects.filter(email=email).exists():
             return Response(
@@ -366,7 +385,14 @@ class RegisterView(APIView):
             xp=0,
             level=1,
             streak=0,
+            coach=invite.coach,
         )
+        
+        invite.use_count += 1
+        if invite.max_uses is None or invite.use_count >= invite.max_uses:
+            invite.is_active = False
+        invite.save(update_fields=["use_count", "is_active"])
+        
         assign_daily_tasks(user)
 
         return Response(
@@ -1498,3 +1524,205 @@ class LoginView(TokenObtainPairView):
 
 class RefreshTokenView(TokenRefreshView):
     permission_classes = [AllowAny]
+
+from rest_framework.permissions import BasePermission
+
+class IsCoach(BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_coach)
+
+class CoachInviteView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request):
+        import string
+        import random
+        invite = CoachInvite.objects.filter(coach=request.user, is_active=True).first()
+        if not invite:
+            code = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+            invite = CoachInvite.objects.create(coach=request.user, code=code, max_uses=1)
+        
+        serializer = CoachInviteSerializer(invite, context={"request": request})
+        return Response(serializer.data)
+
+class CoachInviteRegenerateView(APIView):
+    permission_classes = [IsCoach]
+
+    def post(self, request):
+        import string
+        import random
+        # Invalidate old invites
+        CoachInvite.objects.filter(coach=request.user, is_active=True).update(is_active=False)
+        # Create new invite
+        code = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+        invite = CoachInvite.objects.create(coach=request.user, code=code, max_uses=1)
+        
+        serializer = CoachInviteSerializer(invite, context={"request": request})
+        return Response(serializer.data)
+
+class CoachInvitePreviewView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, code):
+        try:
+            invite = CoachInvite.objects.get(code=code, is_active=True)
+            if invite.expires_at and invite.expires_at < timezone.now():
+                raise CoachInvite.DoesNotExist
+            if invite.max_uses and invite.use_count >= invite.max_uses:
+                raise CoachInvite.DoesNotExist
+            
+            return Response({
+                "valid": True,
+                "coach_name": invite.coach.name or "Your Coach",
+            })
+        except CoachInvite.DoesNotExist:
+            return Response({"valid": False}, status=status.HTTP_404_NOT_FOUND)
+
+class CoachClientListView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request):
+        from .services import get_week_adherence, compute_client_risk_level, get_current_week_window
+        clients = request.user.clients.all()
+        serializer = ClientRosterSerializer(clients, many=True)
+        data = serializer.data
+        
+        for item in data:
+            client_user = next(u for u in clients if str(u.id) == item["id"])
+            adherence = get_week_adherence(client_user)
+            item["week_adherence_pct"] = adherence["pct"]
+            item["risk_level"] = compute_client_risk_level(client_user)
+            
+            import datetime
+            prev_week_start, _ = get_current_week_window(reference_date=timezone.localtime().date() - datetime.timedelta(days=7))
+            prev_adherence = get_week_adherence(client_user, week_start_date=prev_week_start)
+            item["prev_week_adherence_pct"] = prev_adherence["pct"]
+            
+            if adherence["pct"] > prev_adherence["pct"] + 5:
+                item["adherence_trend"] = "up"
+            elif adherence["pct"] < prev_adherence["pct"] - 5:
+                item["adherence_trend"] = "down"
+            else:
+                item["adherence_trend"] = "stable"
+
+        return Response(data)
+
+class CoachClientDetailView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request, client_id):
+        from .services import get_week_adherence, compute_client_risk_level, get_current_week_window
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+        
+        serializer = ClientDetailSerializer(client)
+        data = serializer.data
+        
+        adherence = get_week_adherence(client)
+        data["week_adherence_pct"] = adherence["pct"]
+        data["risk_level"] = compute_client_risk_level(client)
+        
+        import datetime
+        prev_week_start, _ = get_current_week_window(reference_date=timezone.localtime().date() - datetime.timedelta(days=7))
+        prev_adherence = get_week_adherence(client, week_start_date=prev_week_start)
+        data["prev_week_adherence_pct"] = prev_adherence["pct"]
+        
+        if adherence["pct"] > prev_adherence["pct"] + 5:
+            data["adherence_trend"] = "up"
+        elif adherence["pct"] < prev_adherence["pct"] - 5:
+            data["adherence_trend"] = "down"
+        else:
+            data["adherence_trend"] = "stable"
+            
+        data["weekly_report"] = get_weekly_war_report(client)
+        
+        from .services import get_active_dates
+        data["calendar"] = get_active_dates(client, since_days=28)
+        
+        # Journal trend
+        recent_journals = JournalEntry.objects.filter(user=client).order_by("-date")[:14]
+        trend = []
+        for j in reversed(recent_journals):
+            if j.mood_score is not None:
+                trend.append({"date": j.date.isoformat(), "mood_score": j.mood_score, "energy_score": j.energy_score})
+        data["journal_trend"] = trend
+        
+        # Today's tasks
+        today = timezone.localtime().date()
+        tasks = UserTask.objects.filter(user=client, date=today).select_related("task").order_by("created_at")
+        data["tasks"] = UserTaskSerializer(tasks, many=True).data
+
+        return Response(data)
+
+class CoachClientNoteView(APIView):
+    permission_classes = [IsCoach]
+
+    def patch(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+        
+        serializer = CoachNoteInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        client.coach_note = serializer.validated_data["note"]
+        client.save(update_fields=["coach_note"])
+        
+        return Response({"success": True})
+
+class CoachClientTaskCreateView(APIView):
+    permission_classes = [IsCoach]
+
+    @transaction.atomic
+    def post(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+        
+        serializer = CreateClientTaskInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        title = serializer.validated_data["title"]
+        category = serializer.validated_data.get("category", "general")
+        target_date = serializer.validated_data.get("date") or timezone.localtime().date()
+        
+        task, _ = Task.objects.get_or_create(
+            title=f"{CUSTOM_TASK_PREFIX}{title}",
+            defaults={
+                "xp": TASK_XP_AMOUNT,
+                "category": category,
+            },
+        )
+        
+        user_task = UserTask.objects.create(
+            user=client,
+            task=task,
+            date=target_date,
+            completed=False,
+            is_custom=True,
+            custom_title=title,
+            custom_category=category,
+        )
+        
+        return Response(UserTaskSerializer(user_task).data, status=status.HTTP_201_CREATED)
+
+class CoachClientTaskHistoryView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+        
+        serializer = ClientTaskHistoryQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        
+        import datetime
+        end_date = serializer.validated_data.get("date") or timezone.localtime().date()
+        days_range = serializer.validated_data.get("range", 7)
+        start_date = end_date - datetime.timedelta(days=days_range - 1)
+        
+        tasks = UserTask.objects.filter(user=client, date__gte=start_date, date__lte=end_date).select_related("task").order_by("-date", "created_at")
+        
+        return Response({
+            "start_date": start_date,
+            "end_date": end_date,
+            "tasks": UserTaskSerializer(tasks, many=True).data
+        })

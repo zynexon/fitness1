@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import Challenge, DailyChallenge, DailyChallengeCompletion, Task, User, UserTask, XPLog
+from .models import Challenge, CoachInvite, DailyChallenge, DailyChallengeCompletion, Task, User, UserTask, XPLog
 
 
 @admin.register(User)
@@ -16,6 +16,16 @@ class UserAdmin(BaseUserAdmin):
 					"streak",
 					"last_active_date",
 					"created_at",
+				)
+			},
+		),
+		(
+			"Coaching",
+			{
+				"fields": (
+					"is_coach",
+					"coach",
+					"coach_note",
 				)
 			},
 		),
@@ -66,3 +76,10 @@ class ChallengeAdmin(admin.ModelAdmin):
 		"created_at",
 	)
 	list_filter = ("status", "game_type", "winner", "created_at")
+
+
+@admin.register(CoachInvite)
+class CoachInviteAdmin(admin.ModelAdmin):
+	list_display = ("code", "coach", "is_active", "use_count", "created_at")
+	list_filter = ("is_active", "created_at")
+	search_fields = ("code", "coach__email")

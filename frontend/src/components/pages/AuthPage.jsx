@@ -20,15 +20,12 @@ function AuthPage({
   guestScore = null,
 }) {
   const isLoginMode = authMode === 'login'
-  const isRegisterMode = authMode === 'register'
   const isForgotMode = authMode === 'forgot_password'
   const isResetMode = authMode === 'reset_password'
 
   const submitLabel = authLoading
     ? 'Please wait...'
-    : isRegisterMode
-      ? 'Create Account'
-      : isForgotMode
+    : isForgotMode
         ? 'Send Reset Link'
         : isResetMode
           ? 'Set New Password'
@@ -52,13 +49,7 @@ function AuthPage({
       </section>
 
       <section className="mt-5 rounded-3xl border border-zinc-200 bg-white px-4 py-5 lg:px-6 lg:py-6 shadow-md transition-transform duration-200 hover:scale-[1.01] animate-[fadeIn_0.6s_ease]">
-        {guestScore !== null && isRegisterMode ? (
-          <div className="mb-4 rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-center text-white">
-            <p className="text-xs font-semibold text-zinc-400">Your score</p>
-            <p className="text-2xl font-black">{guestScore}</p>
-            <p className="text-xs font-semibold text-zinc-400">Create an account to save it</p>
-          </div>
-        ) : null}
+
 
         {isForgotMode || isResetMode ? (
           <div className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-center">
@@ -71,40 +62,10 @@ function AuthPage({
                 : 'Set a new password for your account.'}
             </p>
           </div>
-        ) : (
-          <div className="mb-4 grid grid-cols-2 rounded-2xl border border-zinc-200 bg-zinc-100 p-1 text-xs font-bold uppercase tracking-wider">
-            <button
-              type="button"
-              className={`rounded-xl px-3 py-2 transition ${isLoginMode ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-              onClick={() => setAuthMode('login')}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              className={`rounded-xl px-3 py-2 transition ${isRegisterMode ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-              onClick={() => setAuthMode('register')}
-            >
-              Register
-            </button>
-          </div>
-        )}
+        ) : null}
 
         <form className="space-y-3" onSubmit={handleAuthSubmit}>
-          {isRegisterMode ? (
-            <div className="space-y-1">
-              <label className="text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Name</label>
-              <input
-                type="text"
-                required
-                maxLength={30}
-                value={nameInput}
-                onChange={(event) => setNameInput(event.target.value)}
-                placeholder="Name"
-                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-500"
-              />
-            </div>
-          ) : null}
+
 
           {!isResetMode ? (
             <div className="space-y-1">

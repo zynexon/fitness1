@@ -32,6 +32,23 @@ class User(AbstractUser):
 	last_perfect_week_shield_date = models.DateField(null=True, blank=True)
 	last_active_date = models.DateField(null=True, blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
+	is_coach = models.BooleanField(default=False)
+	coach = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
+	coach_note = models.TextField(blank=True, default="")
+
+
+class CoachInvite(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	coach = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invites')
+	code = models.CharField(max_length=12, unique=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	expires_at = models.DateTimeField(null=True, blank=True)
+	is_active = models.BooleanField(default=True)
+	max_uses = models.PositiveIntegerField(default=1, null=True, blank=True)
+	use_count = models.PositiveIntegerField(default=0)
+
+	def __str__(self):
+		return f"Invite {self.code} by {self.coach.email}"
 
 
 class Task(models.Model):
