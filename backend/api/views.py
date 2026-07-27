@@ -1,4 +1,5 @@
 import logging
+import os
 import quopri
 from datetime import timedelta
 from urllib.parse import parse_qs, quote, unquote, urlparse

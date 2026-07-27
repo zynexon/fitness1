@@ -542,6 +542,9 @@ def get_or_create_daily_task_set(target_date=None, category=Task.CATEGORY_GENERA
     if category not in FOCUS_CATEGORIES:
         category = Task.CATEGORY_GENERAL
 
+    if Task.objects.exclude(title__startswith=CUSTOM_TASK_PREFIX).count() < DAILY_TASK_COUNT:
+        seed_task_templates()
+
     daily_set, created = DailyTaskSet.objects.get_or_create(
         date=target_date,
         category=category,
