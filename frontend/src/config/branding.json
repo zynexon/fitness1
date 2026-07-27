@@ -1,0 +1,356 @@
+{
+  "appName": "ZYNEXON",
+  "appNameLower": "Zynexon",
+  "appTagline": "The War Within",
+  "shortDescription": "Train your mind daily. Stay consistent.",
+  "themeColorHex": "#111111",
+  "backgroundColorHex": "#f4f4f5",
+  "primaryColor": "#18181b",
+  "accentColor": "#f59e0b",
+  "logoPath": "/logo.jpg",
+  "faviconPath": "/favicon.svg",
+  "icon192Path": "/icons/icon-192.png",
+  "icon512Path": "/icons/icon-512.png",
+  "icon512MaskablePath": "/icons/icon-512-maskable.png",
+  "supportEmail": "support@example.com",
+  "fromEmail": "noreply@example.com",
+
+  "copyPack": {
+    "dailyWisdomLines": [
+      "You are what you repeat.",
+      "Discipline beats motivation.",
+      "Win the day.",
+      "Small wins compound."
+    ],
+
+    "levelTitles": {
+      "1": "Civilian",
+      "2": "Conscript",
+      "3": "Recruit",
+      "4": "Cadet",
+      "5": "Private",
+      "6": "Soldier",
+      "7": "Corporal",
+      "8": "Sergeant",
+      "9": "Lieutenant",
+      "10": "Captain",
+      "11": "Veteran",
+      "12": "Specialist",
+      "13": "Operative",
+      "14": "Ranger",
+      "15": "Commander",
+      "16": "Warlord",
+      "17": "Enforcer",
+      "18": "Phantom",
+      "19": "Shadow",
+      "20": "Legend",
+      "21": "Mythic",
+      "22": "Titan",
+      "23": "Conqueror",
+      "24": "Immortal",
+      "25": "Ghost",
+      "26": "Apex",
+      "27": "Sovereign",
+      "28": "Supreme",
+      "29": "Eternal",
+      "30": "ZYNEXON"
+    },
+
+    "warRoomLabel": "War Room Status",
+    "warDoctrineLabel": "War Doctrine",
+
+    "sessionModeLabels": {
+      "skirmish": { "title": "Skirmish", "label": "SKIRMISH IN PROGRESS" },
+      "battle": { "title": "Battle", "label": "BATTLE IN PROGRESS" },
+      "full_war": { "title": "Full War", "label": "FULL WAR IN PROGRESS" }
+    },
+
+    "streakUnitLabel": "warrior",
+    "streakUnitLabelPlural": "warriors",
+
+    "badgeDefinitions": {
+      "streak_5": { "title": "On Fire", "desc": "Maintain a 5-day streak." },
+      "streak_10": { "title": "Unstoppable", "desc": "Maintain a 10-day streak." },
+      "streak_30": { "title": "No Days Off", "desc": "Maintain a 30-day streak." },
+      "tasks_10": { "title": "Getting Started", "desc": "Complete 10 tasks." },
+      "tasks_50": { "title": "Disciplined", "desc": "Complete 50 tasks." },
+      "tasks_100": { "title": "Iron Discipline", "desc": "Complete 100 tasks." },
+      "level_5": { "title": "Veteran", "desc": "Reach Level 5." },
+      "level_10": { "title": "Captain", "desc": "Reach Level 10." },
+      "level_20": { "title": "Legend", "desc": "Reach Level 20. The elite tier." },
+      "level_30": { "title": "ZYNEXON", "desc": "Reach Level 30. The final rank. The war is won." },
+      "war_1": { "title": "First Blood", "desc": "Complete your first War Mode." },
+      "war_5": { "title": "Warmonger", "desc": "Complete 5 War Mode sessions." },
+      "war_full_5": { "title": "Full War", "desc": "Complete 5 Full War sessions." },
+      "xp_500": { "title": "Grinder", "desc": "Earn 500 total XP." },
+      "xp_1000": { "title": "Elite Earner", "desc": "Earn 1000 total XP." },
+      "shield_max": { "title": "Fortified", "desc": "Hold 3 Shields at once." },
+      "journal_7": { "title": "Self Aware", "desc": "Write 7 journal entries." }
+    },
+
+    "prestigeArtifactNames": {
+      "1": "The Ember Sigil",
+      "2": "Iron Phoenix",
+      "3": "The Obsidian Crown",
+      "4": "Void Matrix",
+      "5": "Diamond Neural Core"
+    },
+
+    "prestigeColorLabels": {
+      "1": "Ember",
+      "2": "Phoenix",
+      "3": "Obsidian",
+      "4": "Void",
+      "5": "Mythic"
+    },
+
+    "landingPageCopy": {
+      "navBrand": "ZYNEXON",
+      "heroEyebrow": "The War Within",
+      "heroHeadlineLines": ["STOP", "LOSING", "YOUR", "DAYS."],
+      "heroSubHeadline": "{appName} is a daily discipline system — tasks, brain training, deep work timers, and a leaderboard — built for people who are tired of knowing what to do and still not doing it.",
+      "activeWarriorsLabel": "{streakUnitLabelPlural} active this week",
+      "heroCTA": "⚡ Test Your Mental Speed — 30 sec",
+      "heroSubCTA": "No signup needed. See your score instantly.",
+      "scrollIndicator": "What you're getting into",
+
+      "problemEyebrow": "Sound familiar?",
+      "problemBullets": [
+        "You know what you should be doing every day. You just don't do it consistently.",
+        "You make plans on Sunday night. By Wednesday they're gone.",
+        "You open your phone to study. You close it 40 minutes later having done nothing."
+      ],
+      "problemCallout": "{appName} makes every day binary — you either won it or you lost it. No grey area. No excuses.",
+
+      "featureEyebrow": "Your daily arsenal",
+      "featureCards": [
+        {
+          "icon": "📋",
+          "title": "Daily Tasks",
+          "color": "border-l-blue-500",
+          "desc": "5 discipline-focused tasks every day, tailored to your focus area — study, fitness, work, logic, or mental resilience. Miss them and your streak breaks."
+        },
+        {
+          "icon": "🧠",
+          "title": "Brain Training",
+          "color": "border-l-purple-500",
+          "desc": "10 games that sharpen focus, working memory, reaction speed, and pattern recognition. 5 minutes a day compounds into a measurably sharper mind."
+        },
+        {
+          "icon": "⚔️",
+          "title": "War Mode",
+          "color": "border-l-red-500",
+          "desc": "Lock in for 25, 45, or 60 minutes of deep work. Phone down. Timer running. XP only lands if you actually show up — it runs on the honour system."
+        },
+        {
+          "icon": "🏆",
+          "title": "Leaderboard",
+          "color": "border-l-amber-500",
+          "desc": "See exactly where you rank against every other {streakUnitLabel} this week. Weekly XP resets every Monday — the race restarts. Nobody coasts."
+        },
+        {
+          "icon": "📖",
+          "title": "Daily Journal",
+          "color": "border-l-emerald-500",
+          "desc": "Rate your mood and energy each day. Set one objective for tomorrow. The honesty compounds — patterns in your performance become visible over time."
+        }
+      ],
+
+      "streakEyebrow": "The mechanic that changes everything",
+      "streakTitle": "The Streak.",
+      "streakDescription": "Every day you complete tasks, your streak grows. Skip one day — it resets to zero. That single rule creates a daily urgency that no notification can replicate.",
+      "streakVisualLabel": "6-day streak — one task today keeps it alive",
+      "streakShieldCopy": "Streak Shields protect you from one missed day — earn them by completing perfect weeks.",
+      "weeklyReportCopy": "Weekly War Report every Sunday — grade, XP breakdown, rank change, verdict.",
+      "rankMilestoneCopy": "Reach XP milestones to unlock new ranks. Level 30 = {appName}. Less than 1% will get there.",
+
+      "rankEyebrow": "Rank progression",
+      "rankTitle": "30 ranks.",
+      "rankDescription": "30 ranks. Each one earned through XP. Every day you show up moves you forward.",
+      "rankLadderSample": [
+        { "level": 1, "name": "Civilian" },
+        { "level": 5, "name": "Private" },
+        { "level": 10, "name": "Captain" },
+        { "level": 15, "name": "Commander" },
+        { "level": 20, "name": "Legend" },
+        { "level": 30, "name": "{appName}" }
+      ],
+      "rankMoreCopy": "+ 24 more ranks between them",
+      "statLabels": {
+        "warriors": "{streakUnitLabelPlural}\nThis Week",
+        "games": "Brain\nGames",
+        "levels": "Levels\nto Climb"
+      },
+
+      "dailyLoopEyebrow": "Daily loop",
+      "dailyLoopSteps": [
+        { "step": "01", "title": "Choose your focus", "body": "Study, Fitness, Work, Discipline, or Logic. Your daily tasks are generated around it." },
+        { "step": "02", "title": "Complete 5 tasks", "body": "Each task is specific and actionable. No vague goals. Either you did it or you didn't." },
+        { "step": "03", "title": "Train your brain", "body": "Run through one or two games from the Training Hub. Each takes under 5 minutes." },
+        { "step": "04", "title": "Log your day", "body": "Rate your mood and energy. Set tomorrow's objective. Takes 30 seconds." },
+        { "step": "05", "title": "Protect your streak", "body": "Don't break it. If you do, shields can save you. Earn shields by completing perfect weeks." }
+      ],
+
+      "gameDemoEyebrow": "One of 10 brain training games",
+      "gameDemoTitle": "Quick Math",
+      "gameDemoDesc": "Solve as many arithmetic problems as you can in 30 seconds. Free to try — no account needed.",
+      "gameDemoCTA": "Start the 30-Second Test",
+
+      "finalCTAEyebrow": "The war is daily",
+      "finalCTAHeadline": "Are you in or are you out?",
+      "finalCTABody": "Free to start. No credit card. Takes less than 60 seconds to create an account and get your first 5 tasks.",
+      "finalCTAPrimary": "Create Account — It's Free",
+      "finalCTASecondary": "Already a {streakUnitLabel}? Log in",
+      "finalCTAFooter": "{count} other {streakUnitLabelPlural} who chose discipline over excuses."
+    },
+
+    "authPageCopy": {
+      "heroTitle": "ZYNEXON",
+      "heroTagline": "The War Within",
+      "heroHeading": "Win your day.",
+      "heroSubHeading": "Or watch yourself lose it.",
+      "heroParagraph": "Most people talk about discipline. You're about to practice it.",
+      "activeWarriorsLabel": "{streakUnitLabelPlural} active this week",
+      "footerCopy": "Join others who chose discipline.",
+      "submitLabel": "Start Winning"
+    },
+
+    "weeklyReportCopy": {
+      "loadingTitle": "ZYNEXON",
+      "loadingSubtitle": "Compiling your war record...",
+      "reportTitle": "Weekly War Report",
+      "pushPrompt": "Get your weekly war report delivered every Sunday."
+    },
+
+    "challengeCopy": {
+      "shareTitle": "{appName} Challenge ⚔️",
+      "shareScoreTemplate": "{name} scored {score} in {appName} {game}. Can you beat it? ⚔️",
+      "shareRoundsTemplate": "{name} cleared {appName} {game} in {rounds}. Can you beat it? ⚔️",
+      "shareTimeTemplate": "{name} finished {appName} {game} in {time}. Can you beat it? ⚔️"
+    },
+
+    "guestQuickMathCopy": {
+      "lowScoreMsg": "This is where every {streakUnitLabel} starts. The gap closes fast.",
+      "featureWarMode": { "label": "War Mode", "desc": "25–60 min deep work sessions. XP only if you finish." },
+      "featureLeaderboard": { "label": "Live leaderboard", "desc": "Weekly rank among all active {streakUnitLabelPlural}. Resets every Monday." }
+    },
+
+    "homeCopy": {
+      "greetingFallback": "The War Within.",
+      "wisdomFooter": "ZYNEXON / The War Within",
+      "trainingHubSubtext": "Cultivate your mental discipline.",
+      "warModeSubtext": "One timer. No excuses. Quit early and earn nothing.",
+      "duelsLabel": "1v1 Duels",
+      "duelsSubLabel": "⚔️ My Challenges",
+      "duelsDesc": "Create, share, and track your challenge wars.",
+      "warRoomTab": "War Room",
+      "disciplineBeastTab": "Discipline Beast",
+      "shieldEarnedMsg": "🛡️ Shield earned. Full War rewarded.",
+      "honestNoShowMsg": "Respect for being honest. Come back when you're ready.",
+      "taskShieldAwardMsg": "🛡️ Shield earned: +{count}. Discipline pays.",
+      "warModeDefaultLabel": "WAR MODE IN PROGRESS",
+      "warModeActiveSubtext": "You said you would. Now prove it.",
+      "timerCompleteTitle": "Timer Complete",
+      "timerCompleteBody": "Did you actually work?",
+      "timerEarnedBtn": "I earned this",
+      "timerNoShowBtn": "I didn't show up",
+      "warModeCompleteTitle": "War Mode Complete",
+      "setNameTitle": "Set Your Name",
+      "setNameDesc": "Add your name to continue and appear on the leaderboard."
+    },
+
+    "leaderboardCopy": {
+      "header": "{count} WARRIORS. ONE THRONE.",
+      "allTimeTab": "ALL-TIME WAR",
+      "hallOfLegendsTab": "HALL OF LEGENDS",
+      "warboardTitle": "THE WARBOARD",
+      "rarestBoard": "⬟ The Rarest Board ⬟",
+      "rarestBoardDesc": "These {streakUnitLabelPlural} reached Level 20, then chose to burn their entire progression for a Legacy Artifact. Every name here sacrificed months of work.",
+      "prestigeEligible": "You are eligible for Prestige",
+      "prestigeEligibleDesc": "Go to Profile → The Vault to burn your progression and claim your Legacy Artifact.",
+      "prestigeNotEligible": "Reach Level 20 to be eligible",
+      "chaseWarning": "⚠️ {name} is {gap} XP behind you. Don't stop.",
+      "xpGapLabel": "{gap} XP behind {name} ↑",
+      "prestigeQuote": "Bearer of {artifact}. This {streakUnitLabel} burned their progression and chose legacy over comfort."
+    },
+
+    "prestigeCopy": {
+      "hallTitle": "⬟ Hall of Legends ⬟",
+      "defaultName": "Warrior",
+      "defaultRankName": "Initiate",
+      "emptyTitle": "No prestige holders yet",
+      "notEligibleMsg": "You need {needed} more levels to be eligible. Reach Level 20, then burn it all.",
+      "eligibleMsg": "You are eligible. Go to The Vault and claim your legacy."
+    },
+
+    "levelUpCopy": {
+      "title": "Level Up",
+      "level20Plus": "Legend tier unlocked. Few reach this zone. Keep pressing.",
+      "level10Plus": "Captain rank earned. Lead from the front and keep climbing.",
+      "default": "Keep stacking wins.",
+      "maxLevelReached": "You are {appName}. The war is won — now defend the throne every day.",
+      "maxLevelInfo": "You are {appName}. The war is won. Hold the line."
+    },
+
+    "installPromptTitle": "Install {appName}",
+
+    "shieldModalCopy": {
+      "title": "🛡️ Streak Shield",
+      "usedTitle": "🛡️ Shield Used",
+      "usedBody": "Your {days}-day streak was protected.",
+      "usedFooter": "{count} shield(s) remaining. Don't make it a habit.",
+      "howItWorks": "Miss a day. Keep your streak. That's what a Shield does — it activates automatically, no action needed.",
+      "limitation": "Shields do not cover 2+ missed days. Miss two in a row and your streak resets regardless of how many shields you have.",
+      "earnMethods": [
+        { "title": "Perfect Week", "desc": "Complete all 5 tasks for 7 days straight." },
+        { "title": "XP Milestone", "desc": "Every 500 XP earned grants one Shield." },
+        { "title": "Full War", "desc": "Complete a 60-min Full War Mode session." }
+      ],
+      "maxNote": "You can hold a maximum of 3 Shields at once. Earn them before you need them.",
+      "integrityNote": "The XP means nothing if you didn't earn it."
+    },
+
+    "ranksModalCopy": {
+      "title": "⚔️ Ranks",
+      "intro": "Every XP you earn advances your rank. Ranks are earned — not given.",
+      "xpSources": "XP is gained through daily tasks, training games, War Mode, and your journal. The more consistent you are, the faster you climb."
+    },
+
+    "warModeModalCopy": {
+      "title": "⚔️ War Mode",
+      "intro": "War Mode is a timed focus session. You commit to a block of deep work, lock your phone, and earn XP when you finish.",
+      "outsideApp": "The work happens outside the app — on your laptop, your notebook, wherever. {appName} just holds you accountable and rewards you for showing up.",
+      "sessions": [
+        { "name": "Skirmish", "duration": "25 min", "xp": "+30 XP", "desc": "A quick focused push." },
+        { "name": "Battle", "duration": "45 min", "xp": "+60 XP", "desc": "A proper work block." },
+        { "name": "Full War", "duration": "60 min", "xp": "+100 XP", "desc": "Maximum effort. Earns a Streak Shield." }
+      ],
+      "honourNote": "War Mode runs on the honour system. The XP means nothing if you didn't earn it. Your discipline is between you and yourself.",
+      "lockScreenNote": "Lock your screen. The timer runs in the background."
+    },
+
+    "warModeEntryCopy": {
+      "title": "Enter War Mode",
+      "subtitle": "Choose one block. Start it. Finish it.",
+      "integrityNote": "This only works if you're honest with yourself. The XP means nothing if you didn't earn it.",
+      "lockNote": "Lock your screen. The timer runs in the background."
+    },
+
+    "weeklyResetLabel": "WEEKLY WAR — RESETS IN {days} DAYS {hours} HRS",
+
+    "challengeTypePrefixes": {
+      "complete_3_tasks": "Lock In",
+      "earn_20_xp_from_games": "Grind",
+      "write_journal_entry": "Clarity",
+      "complete_morning_task_before_10am": "First Strike"
+    },
+
+    "dailyChallengeTitle": "Today's Challenge",
+    "dailyChallengeSubtitle": "Resets at midnight. No extensions.",
+
+    "shieldBannerCopy": {
+      "title": "🛡️ {count} Streak Shield(s)",
+      "noShields": "🛡️ No shields. Earn one with a Perfect Week."
+    }
+  }
+}

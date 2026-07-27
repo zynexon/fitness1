@@ -1,0 +1,28 @@
+{
+  "name": "{{appName}} - {{appTagline}}",
+  "short_name": "{{appNameLower}}",
+  "description": "{{shortDescription}}",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "{{backgroundColorHex}}",
+  "theme_color": "{{themeColorHex}}",
+  "icons": [
+    {
+      "src": "{{icon192Path}}",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "{{icon512Path}}",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "{{icon512MaskablePath}}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
