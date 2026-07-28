@@ -1183,3 +1183,144 @@ def compute_client_risk_level(user):
             return "slipping"
             
     return "on_track"
+
+
+# ── Workout System ──────────────────────────────────────────────────────────
+
+WORKOUT_XP_AMOUNT = 35
+
+
+def get_active_program_assignment(user, reference_date=None):
+    """Return the client's current active ProgramAssignment, or None."""
+    from .models import ProgramAssignment
+
+    target_date = reference_date or timezone.localdate()
+    return (
+        ProgramAssignment.objects.filter(
+            client=user,
+            is_active=True,
+            start_date__lte=target_date,
+        )
+        .select_related("program")
+        .order_by("-created_at")
+        .first()
+    )
+
+
+def get_todays_workout_day(user, reference_date=None):
+    """
+    Return the WorkoutDay for the user's active program matching the given
+    weekday, with exercises prefetched. Returns None if no active program
+    or no workout scheduled for that weekday (= rest day).
+    """
+    from .models import WorkoutDay, WorkoutDayExercise
+
+    target_date = reference_date or timezone.localdate()
+    assignment = get_active_program_assignment(user, target_date)
+    if not assignment:
+        return None
+
+    weekday = target_date.weekday()
+    return (
+        WorkoutDay.objects.filter(
+            program=assignment.program,
+            weekday=weekday,
+        )
+        .prefetch_related(
+            Prefetch(
+                "exercises",
+                queryset=WorkoutDayExercise.objects.select_related("exercise").order_by("order"),
+            )
+        )
+        .first()
+    )
+
+
+def get_or_create_workout_log(user, workout_day, target_date=None):
+    """
+    Get or create a WorkoutLog + one WorkoutLogExercise per prescription.
+    Same pattern as JournalEntry.objects.get_or_create.
+    """
+    from .models import WorkoutLog, WorkoutLogExercise, WorkoutDayExercise
+
+    target_date = target_date or timezone.localdate()
+
+    log, created = WorkoutLog.objects.get_or_create(
+        user=user,
+        date=target_date,
+        defaults={"workout_day": workout_day},
+    )
+
+    if created:
+        prescriptions = WorkoutDayExercise.objects.filter(
+            workout_day=workout_day,
+        ).order_by("order")
+
+        WorkoutLogExercise.objects.bulk_create([
+            WorkoutLogExercise(
+                workout_log=log,
+                workout_day_exercise=p,
+                completed=False,
+            )
+            for p in prescriptions
+        ])
+
+    return log, created
+
+
+@transaction.atomic
+def submit_workout_log(user, workout_log, exercise_updates):
+    """
+    Apply per-exercise completion updates to WorkoutLogExercise rows,
+    mark the WorkoutLog as completed, and award XP exactly once.
+
+    exercise_updates: list of dicts with keys:
+        workout_day_exercise_id, completed, actual_weight, actual_reps, note
+    """
+    from .models import WorkoutLogExercise
+
+    was_already_completed = workout_log.completed
+
+    # Build a lookup of existing exercise log entries for this workout log
+    exercise_logs = {
+        str(el.workout_day_exercise_id): el
+        for el in WorkoutLogExercise.objects.filter(workout_log=workout_log)
+    }
+
+    for update in exercise_updates:
+        wde_id = str(update.get("workout_day_exercise_id", ""))
+        el = exercise_logs.get(wde_id)
+        if not el:
+            continue
+
+        el.completed = update.get("completed", False)
+        el.actual_weight = update.get("actual_weight", "")
+        el.actual_reps = update.get("actual_reps", "")
+        el.note = update.get("note", "")
+        el.save(update_fields=["completed", "actual_weight", "actual_reps", "note"])
+
+    # Mark workout log as completed
+    if not was_already_completed:
+        workout_log.completed = True
+        workout_log.completed_at = timezone.now()
+
+    workout_log.save(update_fields=["completed", "completed_at"])
+
+    # Award XP exactly once (mirror journal's `if created` guard)
+    xp_awarded = 0
+    if not was_already_completed:
+        locked_user = User.objects.select_for_update().get(id=user.id)
+        check_streak_on_login(locked_user)
+
+        xp_awarded = WORKOUT_XP_AMOUNT
+        increment_user_xp(locked_user, xp_awarded)
+        create_xp_log(locked_user, XPLog.SOURCE_WORKOUT, xp_awarded)
+        update_streak(locked_user)
+
+        workout_log.xp_awarded = xp_awarded
+        workout_log.save(update_fields=["xp_awarded"])
+
+        # Refresh user object to return updated values
+        user.refresh_from_db()
+
+    return xp_awarded

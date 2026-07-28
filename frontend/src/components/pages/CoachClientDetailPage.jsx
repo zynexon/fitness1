@@ -18,11 +18,24 @@ function CoachClientDetailPage({ authedFetch }) {
   const [taskDate, setTaskDate] = useState('')
   const [assigningTask, setAssigningTask] = useState(false)
 
+  // Program state
+  const [programData, setProgramData] = useState({ has_active_program: false, assignment: null, workout_history: [] })
+  const [coachPrograms, setCoachPrograms] = useState([])
+  const [selectedProgramId, setSelectedProgramId] = useState('')
+  const [assigningProgram, setAssigningProgram] = useState(false)
+
   const fetchClient = async () => {
     try {
-      const data = await authedFetch(`/api/coach/clients/${id}/`)
+      const [data, progData, coachProgs] = await Promise.all([
+        authedFetch(`/api/coach/clients/${id}/`),
+        authedFetch(`/api/coach/clients/${id}/program/`),
+        authedFetch('/api/coach/programs/')
+      ])
       setClient(data)
       setNoteInput(data.coach_note || '')
+      setProgramData(progData)
+      setCoachPrograms(coachProgs)
+      if (coachProgs.length > 0) setSelectedProgramId(coachProgs[0].id)
     } catch (err) {
       setError(err.message || 'Failed to fetch client details.')
     } finally {
@@ -69,6 +82,34 @@ function CoachClientDetailPage({ authedFetch }) {
       alert(err.message || 'Error assigning task.')
     } finally {
       setAssigningTask(false)
+    }
+  }
+
+  const handleAssignProgram = async (e) => {
+    e.preventDefault()
+    if (!selectedProgramId) return
+    setAssigningProgram(true)
+    try {
+      await authedFetch(`/api/coach/clients/${id}/assign-program/`, {
+        method: 'POST',
+        body: JSON.stringify({ program_id: selectedProgramId }),
+      })
+      alert('Program assigned!')
+      fetchClient()
+    } catch (err) {
+      alert(err.message || 'Error assigning program.')
+    } finally {
+      setAssigningProgram(false)
+    }
+  }
+
+  const handleUnassignProgram = async () => {
+    if (!window.confirm('Remove active program from this client?')) return
+    try {
+      await authedFetch(`/api/coach/clients/${id}/program/`, { method: 'DELETE' })
+      fetchClient()
+    } catch (err) {
+      alert(err.message || 'Error removing program.')
     }
   }
 
@@ -193,6 +234,73 @@ function CoachClientDetailPage({ authedFetch }) {
               </ul>
             ) : (
               <p className="text-sm font-bold text-zinc-400">No tasks for today.</p>
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 md:p-8">
+            <h2 className="text-lg font-black text-zinc-900 mb-4">Workout Program</h2>
+            
+            {programData.has_active_program ? (
+              <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-50/50 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Active Program</span>
+                    <h3 className="text-lg font-black uppercase text-zinc-900">{programData.assignment.program_name}</h3>
+                    <p className="text-xs font-bold text-zinc-500">Started {new Date(programData.assignment.start_date).toLocaleDateString()}</p>
+                  </div>
+                  <button onClick={handleUnassignProgram} className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-200">
+                    Unassign
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleAssignProgram} className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                <label className="mb-2 block text-xs font-bold uppercase tracking-widest text-zinc-500">Assign Program</label>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedProgramId}
+                    onChange={(e) => setSelectedProgramId(e.target.value)}
+                    className="flex-1 rounded-xl border-2 border-zinc-200 bg-white px-3 py-2 text-sm font-bold text-zinc-900 outline-none focus:border-zinc-900"
+                  >
+                    {coachPrograms.length === 0 && <option value="">No programs available...</option>}
+                    {coachPrograms.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={assigningProgram || coachPrograms.length === 0}
+                    className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-black uppercase tracking-wider text-white hover:bg-zinc-800 disabled:opacity-50"
+                  >
+                    Assign
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <h3 className="mb-3 text-sm font-black uppercase text-zinc-700">Recent Workouts (28 days)</h3>
+            {programData.workout_history.length > 0 ? (
+              <div className="space-y-3">
+                {programData.workout_history.map(log => (
+                  <div key={log.id} className="flex items-center justify-between rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                    <div>
+                      <p className={`text-sm font-black uppercase ${log.completed ? 'text-emerald-600' : 'text-zinc-600'}`}>
+                        {log.workout_day_title}
+                      </p>
+                      <p className="text-xs font-bold text-zinc-500">{new Date(log.date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="text-right">
+                      {log.completed ? (
+                        <span className="rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-black text-emerald-600">+{log.xp_awarded} XP</span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-zinc-400">Missed</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm font-bold text-zinc-400">No workout history.</p>
             )}
           </div>
         </div>

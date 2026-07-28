@@ -1,7 +1,12 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import Challenge, CoachInvite, DailyChallenge, DailyChallengeCompletion, Task, User, UserTask, XPLog
+from .models import (
+	Challenge, CoachInvite, DailyChallenge, DailyChallengeCompletion,
+	Task, User, UserTask, XPLog,
+	Exercise, Program, WorkoutDay, WorkoutDayExercise,
+	ProgramAssignment, WorkoutLog, WorkoutLogExercise,
+)
 
 
 @admin.register(User)
@@ -83,3 +88,47 @@ class CoachInviteAdmin(admin.ModelAdmin):
 	list_display = ("code", "coach", "is_active", "use_count", "created_at")
 	list_filter = ("is_active", "created_at")
 	search_fields = ("code", "coach__email")
+
+
+# ── Workout System ──────────────────────────────────────────────────────────
+
+@admin.register(Exercise)
+class ExerciseAdmin(admin.ModelAdmin):
+	list_display = ("name", "coach", "created_at")
+	list_filter = ("coach",)
+	search_fields = ("name",)
+
+
+@admin.register(Program)
+class ProgramAdmin(admin.ModelAdmin):
+	list_display = ("name", "coach", "created_at")
+	list_filter = ("coach",)
+	search_fields = ("name",)
+
+
+@admin.register(WorkoutDay)
+class WorkoutDayAdmin(admin.ModelAdmin):
+	list_display = ("program", "weekday", "title", "created_at")
+	list_filter = ("weekday",)
+
+
+@admin.register(WorkoutDayExercise)
+class WorkoutDayExerciseAdmin(admin.ModelAdmin):
+	list_display = ("workout_day", "exercise", "order", "prescribed_sets", "prescribed_reps")
+
+
+@admin.register(ProgramAssignment)
+class ProgramAssignmentAdmin(admin.ModelAdmin):
+	list_display = ("client", "program", "assigned_by", "start_date", "is_active", "created_at")
+	list_filter = ("is_active",)
+
+
+@admin.register(WorkoutLog)
+class WorkoutLogAdmin(admin.ModelAdmin):
+	list_display = ("user", "workout_day", "date", "completed", "xp_awarded", "created_at")
+	list_filter = ("completed", "date")
+
+
+@admin.register(WorkoutLogExercise)
+class WorkoutLogExerciseAdmin(admin.ModelAdmin):
+	list_display = ("workout_log", "workout_day_exercise", "completed", "actual_weight", "actual_reps")

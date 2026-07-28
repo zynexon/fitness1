@@ -124,12 +124,14 @@ class XPLog(models.Model):
 	SOURCE_JOURNAL = "journal"
 	SOURCE_DAILY_CHALLENGE = "daily_challenge"
 	SOURCE_WAGER = "wager"
+	SOURCE_WORKOUT = "workout"
 	SOURCE_CHOICES = [
 		(SOURCE_TASK, "Task"),
 		(SOURCE_GAME, "Game"),
 		(SOURCE_JOURNAL, "Journal"),
 		(SOURCE_DAILY_CHALLENGE, "Daily Challenge"),
 		(SOURCE_WAGER, "Wager"),
+		(SOURCE_WORKOUT, "Workout"),
 	]
 
 	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -366,3 +368,133 @@ class UserArtifact(models.Model):
 				name="unique_user_artifact",
 			)
 		]
+
+
+# ── Workout System ──────────────────────────────────────────────────────────
+
+WEEKDAY_CHOICES = [
+	(0, "Monday"),
+	(1, "Tuesday"),
+	(2, "Wednesday"),
+	(3, "Thursday"),
+	(4, "Friday"),
+	(5, "Saturday"),
+	(6, "Sunday"),
+]
+
+
+class Exercise(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	coach = models.ForeignKey(User, on_delete=models.CASCADE, related_name="exercises")
+	name = models.CharField(max_length=255)
+	description = models.TextField(blank=True, default="")
+	video_url = models.URLField(blank=True, default="")
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["name"]
+
+	def __str__(self):
+		return self.name
+
+
+class Program(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	coach = models.ForeignKey(User, on_delete=models.CASCADE, related_name="programs")
+	name = models.CharField(max_length=255)
+	description = models.TextField(blank=True, default="")
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-created_at"]
+
+	def __str__(self):
+		return self.name
+
+
+class WorkoutDay(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="workout_days")
+	weekday = models.IntegerField(choices=WEEKDAY_CHOICES)
+	title = models.CharField(max_length=255)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["weekday"]
+		constraints = [
+			models.UniqueConstraint(
+				fields=["program", "weekday"],
+				name="unique_workout_day_per_program_weekday",
+			)
+		]
+
+	def __str__(self):
+		return f"{self.program.name} — {self.get_weekday_display()}: {self.title}"
+
+
+class WorkoutDayExercise(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	workout_day = models.ForeignKey(WorkoutDay, on_delete=models.CASCADE, related_name="exercises")
+	exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE, related_name="workout_day_entries")
+	order = models.IntegerField(default=0)
+	prescribed_sets = models.IntegerField(null=True, blank=True)
+	prescribed_reps = models.CharField(max_length=50, blank=True, default="")
+	notes = models.CharField(max_length=255, blank=True, default="")
+
+	class Meta:
+		ordering = ["order"]
+
+	def __str__(self):
+		return f"{self.exercise.name} (order {self.order})"
+
+
+class ProgramAssignment(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	client = models.ForeignKey(User, on_delete=models.CASCADE, related_name="program_assignments")
+	program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="assignments")
+	assigned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="assigned_programs")
+	start_date = models.DateField()
+	is_active = models.BooleanField(default=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-created_at"]
+
+	def __str__(self):
+		return f"{self.client} → {self.program.name}"
+
+
+class WorkoutLog(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="workout_logs")
+	workout_day = models.ForeignKey(WorkoutDay, on_delete=models.CASCADE, related_name="logs")
+	date = models.DateField()
+	completed = models.BooleanField(default=False)
+	xp_awarded = models.IntegerField(default=0)
+	completed_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-date"]
+		constraints = [
+			models.UniqueConstraint(
+				fields=["user", "date"],
+				name="unique_workout_log_per_user_date",
+			)
+		]
+
+	def __str__(self):
+		return f"{self.user} — {self.date} — {self.workout_day.title}"
+
+
+class WorkoutLogExercise(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	workout_log = models.ForeignKey(WorkoutLog, on_delete=models.CASCADE, related_name="exercise_logs")
+	workout_day_exercise = models.ForeignKey(WorkoutDayExercise, on_delete=models.CASCADE, related_name="log_entries")
+	completed = models.BooleanField(default=False)
+	actual_weight = models.CharField(max_length=50, blank=True, default="")
+	actual_reps = models.CharField(max_length=50, blank=True, default="")
+	note = models.CharField(max_length=255, blank=True, default="")
+
+	class Meta:
+		ordering = ["workout_day_exercise__order"]

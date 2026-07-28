@@ -313,3 +313,161 @@ class CreateClientTaskInputSerializer(serializers.Serializer):
 class ClientTaskHistoryQuerySerializer(serializers.Serializer):
     date = serializers.DateField(required=False)
     range = serializers.IntegerField(required=False, min_value=1, max_value=30, default=7)
+
+
+# ── Workout System Serializers ──────────────────────────────────────────────
+
+from .models import (
+    Exercise, Program, WorkoutDay, WorkoutDayExercise,
+    ProgramAssignment, WorkoutLog, WorkoutLogExercise,
+)
+
+
+class ExerciseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Exercise
+        fields = ["id", "name", "description", "video_url", "created_at"]
+
+
+class ExerciseInputSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    video_url = serializers.URLField(required=False, allow_blank=True, default="")
+
+
+class WorkoutDayExerciseSerializer(serializers.ModelSerializer):
+    exercise_name = serializers.CharField(source="exercise.name", read_only=True)
+    exercise_description = serializers.CharField(source="exercise.description", read_only=True)
+    exercise_video_url = serializers.URLField(source="exercise.video_url", read_only=True)
+    exercise_id = serializers.UUIDField(source="exercise.id", read_only=True)
+
+    class Meta:
+        model = WorkoutDayExercise
+        fields = [
+            "id", "exercise_id", "exercise_name", "exercise_description",
+            "exercise_video_url", "order", "prescribed_sets",
+            "prescribed_reps", "notes",
+        ]
+
+
+class WorkoutDaySerializer(serializers.ModelSerializer):
+    exercises = WorkoutDayExerciseSerializer(many=True, read_only=True)
+    weekday_label = serializers.CharField(source="get_weekday_display", read_only=True)
+
+    class Meta:
+        model = WorkoutDay
+        fields = ["id", "weekday", "weekday_label", "title", "exercises", "created_at"]
+
+
+class ProgramSerializer(serializers.ModelSerializer):
+    workout_days = WorkoutDaySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Program
+        fields = ["id", "name", "description", "workout_days", "created_at"]
+
+
+class ProgramListSerializer(serializers.ModelSerializer):
+    """Lighter serializer for list views (no nested workout_days)."""
+    day_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Program
+        fields = ["id", "name", "description", "day_count", "created_at"]
+
+    def get_day_count(self, obj):
+        return obj.workout_days.count()
+
+
+class ProgramInputSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class WorkoutDayInputSerializer(serializers.Serializer):
+    weekday = serializers.IntegerField(min_value=0, max_value=6)
+    title = serializers.CharField(max_length=255)
+
+
+class WorkoutDayExerciseInputSerializer(serializers.Serializer):
+    exercise_id = serializers.UUIDField()
+    order = serializers.IntegerField(required=False, default=0)
+    prescribed_sets = serializers.IntegerField(required=False, allow_null=True, default=None)
+    prescribed_reps = serializers.CharField(required=False, allow_blank=True, max_length=50, default="")
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=255, default="")
+
+
+class AssignProgramInputSerializer(serializers.Serializer):
+    program_id = serializers.UUIDField()
+    start_date = serializers.DateField(required=False)
+
+
+class ProgramAssignmentSerializer(serializers.ModelSerializer):
+    program_name = serializers.CharField(source="program.name", read_only=True)
+
+    class Meta:
+        model = ProgramAssignment
+        fields = ["id", "program", "program_name", "start_date", "is_active", "created_at"]
+
+
+class WorkoutLogExerciseSerializer(serializers.ModelSerializer):
+    exercise_name = serializers.CharField(
+        source="workout_day_exercise.exercise.name", read_only=True
+    )
+    prescribed_sets = serializers.IntegerField(
+        source="workout_day_exercise.prescribed_sets", read_only=True
+    )
+    prescribed_reps = serializers.CharField(
+        source="workout_day_exercise.prescribed_reps", read_only=True
+    )
+    prescription_notes = serializers.CharField(
+        source="workout_day_exercise.notes", read_only=True
+    )
+    exercise_video_url = serializers.URLField(
+        source="workout_day_exercise.exercise.video_url", read_only=True
+    )
+    workout_day_exercise_id = serializers.UUIDField(
+        source="workout_day_exercise.id", read_only=True
+    )
+    order = serializers.IntegerField(
+        source="workout_day_exercise.order", read_only=True
+    )
+
+    class Meta:
+        model = WorkoutLogExercise
+        fields = [
+            "id", "workout_day_exercise_id", "exercise_name",
+            "exercise_video_url", "prescribed_sets", "prescribed_reps",
+            "prescription_notes", "order",
+            "completed", "actual_weight", "actual_reps", "note",
+        ]
+
+
+class WorkoutLogSerializer(serializers.ModelSerializer):
+    exercise_logs = WorkoutLogExerciseSerializer(many=True, read_only=True)
+    workout_day_title = serializers.CharField(source="workout_day.title", read_only=True)
+
+    class Meta:
+        model = WorkoutLog
+        fields = [
+            "id", "workout_day", "workout_day_title", "date",
+            "completed", "xp_awarded", "completed_at",
+            "exercise_logs", "created_at",
+        ]
+
+
+class WorkoutLogExerciseUpdateSerializer(serializers.Serializer):
+    workout_day_exercise_id = serializers.UUIDField()
+    completed = serializers.BooleanField()
+    actual_weight = serializers.CharField(required=False, allow_blank=True, max_length=50, default="")
+    actual_reps = serializers.CharField(required=False, allow_blank=True, max_length=50, default="")
+    note = serializers.CharField(required=False, allow_blank=True, max_length=255, default="")
+
+
+class SubmitWorkoutLogInputSerializer(serializers.Serializer):
+    workout_log_id = serializers.UUIDField()
+    exercises = WorkoutLogExerciseUpdateSerializer(many=True)
+
+
+class WorkoutHistoryQuerySerializer(serializers.Serializer):
+    range = serializers.IntegerField(required=False, min_value=1, max_value=90, default=28)

@@ -4,6 +4,9 @@ import JoinCoachPage from './components/pages/JoinCoachPage'
 import CoachShell from './components/layout/CoachShell'
 import CoachRosterPage from './components/pages/CoachRosterPage'
 import CoachClientDetailPage from './components/pages/CoachClientDetailPage'
+import CoachExerciseLibraryPage from './components/pages/coach/CoachExerciseLibraryPage'
+import CoachProgramsPage from './components/pages/coach/CoachProgramsPage'
+import CoachProgramBuilderPage from './components/pages/coach/CoachProgramBuilderPage'
 import confetti from 'canvas-confetti'
 import ConfirmationModal from './components/ConfirmationModal'
 import AddTaskModal from './components/AddTaskModal'
@@ -26,6 +29,7 @@ import GuestQuickMath from './components/pages/GuestQuickMath'
 import GameHubPage from './components/pages/GameHubPage'
 import JournalPage from './components/pages/JournalPage'
 import LandingPage from './components/pages/LandingPage'
+import WorkoutPage from './components/pages/WorkoutPage'
 import ProfilePage from './components/pages/ProfilePage'
 import TasksPage from './components/pages/TasksPage'
 import useAuth from './hooks/useAuth'
@@ -1265,6 +1269,11 @@ function App() {
       return
     }
 
+    if (normalizedPath === '/workout') {
+      setActiveTab('Workout')
+      return
+    }
+
     if (normalizedPath === '/game/pattern-sequence') {
       setGameRoute('/game/pattern-sequence')
       setActiveTab('Game')
@@ -1913,6 +1922,10 @@ function App() {
       }
       if (path === '/tasks') {
         setActiveTab('Tasks')
+        return
+      }
+      if (path === '/workout') {
+        setActiveTab('Workout')
         return
       }
       if (path === '/game/quick-math') {
@@ -3521,12 +3534,22 @@ function App() {
       <CoachShell
         coachName={user.name}
         onLogout={handleLogout}
-        activePage={location.pathname.includes('/clients/') ? 'clients' : 'dashboard'}
+        activePage={
+          location.pathname.includes('/exercises') ? 'exercises' :
+          location.pathname.includes('/programs') ? 'programs' :
+          location.pathname.includes('/clients') ? 'clients' : 'dashboard'
+        }
         onNavigate={(key) => {
           if (key === 'dashboard' || key === 'clients') reactRouterNavigate('/coach/clients')
+          else if (key === 'exercises') reactRouterNavigate('/coach/exercises')
+          else if (key === 'programs') reactRouterNavigate('/coach/programs')
         }}
       >
         <Routes>
+          <Route path="/coach/exercises" element={<CoachExerciseLibraryPage authedFetch={authedFetch} />} />
+          <Route path="/coach/programs/:id" element={<CoachProgramBuilderPage authedFetch={authedFetch} />} />
+          <Route path="/coach/programs" element={<CoachProgramsPage authedFetch={authedFetch} />} />
+          
           <Route path="/coach/clients/:id" element={<CoachClientDetailPage authedFetch={authedFetch} />} />
           <Route path="/coach/clients" element={<CoachRosterPage authedFetch={authedFetch} />} />
           <Route path="*" element={<CoachRosterPage authedFetch={authedFetch} />} />
@@ -3906,6 +3929,7 @@ function App() {
 
   const navChangeHandler = (tab) => {
     if (tab === 'Home') { navigate('/'); return }
+    if (tab === 'Workout') { navigate('/workout'); return }
     if (tab === 'Journal') { navigate('/journal'); return }
     if (tab === 'Leaderboard') { navigate('/leaderboard'); return }
     if (tab === 'Profile') { navigate('/profile') }
@@ -4394,6 +4418,20 @@ function App() {
           onJournalSaved={() => {
             void refreshDailyChallengeStatus()
           }}
+          onXpEarned={(xpAmount, totalXp, newLevel, newStreak) => {
+            setXp(totalXp)
+            setLevel(newLevel)
+            setStreakDays(newStreak)
+            setUser((current) => (
+              current
+                ? { ...current, xp: totalXp, level: newLevel, streak: newStreak }
+                : current
+            ))
+          }}
+        />
+      ) : activeTab === 'Workout' ? (
+        <WorkoutPage
+          authedFetch={authedFetch}
           onXpEarned={(xpAmount, totalXp, newLevel, newStreak) => {
             setXp(totalXp)
             setLevel(newLevel)

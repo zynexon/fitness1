@@ -45,6 +45,20 @@ from .views import (
     CoachClientNoteView,
     CoachClientTaskCreateView,
     CoachClientTaskHistoryView,
+    # Workout system
+    CoachExerciseListView,
+    CoachExerciseDetailView,
+    CoachProgramListView,
+    CoachProgramDetailView,
+    CoachProgramDayCreateView,
+    CoachProgramDayDetailView,
+    CoachProgramDayExerciseCreateView,
+    CoachProgramDayExerciseDetailView,
+    CoachClientAssignProgramView,
+    CoachClientProgramView,
+    WorkoutTodayView,
+    WorkoutSubmitView,
+    WorkoutHistoryView,
 )
 
 urlpatterns = [
@@ -96,4 +110,19 @@ urlpatterns = [
     path("coach/clients/<uuid:client_id>/note/", CoachClientNoteView.as_view(), name="coach-client-note"),
     path("coach/clients/<uuid:client_id>/tasks/", CoachClientTaskCreateView.as_view(), name="coach-client-tasks"),
     path("coach/clients/<uuid:client_id>/tasks/history/", CoachClientTaskHistoryView.as_view(), name="coach-client-tasks-history"),
+    # ── Coach Workout / Program Builder ──
+    path("coach/exercises/", CoachExerciseListView.as_view(), name="coach-exercises"),
+    path("coach/exercises/<uuid:pk>/", CoachExerciseDetailView.as_view(), name="coach-exercise-detail"),
+    path("coach/programs/", CoachProgramListView.as_view(), name="coach-programs"),
+    path("coach/programs/<uuid:pk>/", CoachProgramDetailView.as_view(), name="coach-program-detail"),
+    path("coach/programs/<uuid:pk>/days/", CoachProgramDayCreateView.as_view(), name="coach-program-day-create"),
+    path("coach/programs/<uuid:pk>/days/<uuid:day_id>/", CoachProgramDayDetailView.as_view(), name="coach-program-day-detail"),
+    path("coach/programs/<uuid:pk>/days/<uuid:day_id>/exercises/", CoachProgramDayExerciseCreateView.as_view(), name="coach-program-day-exercise-create"),
+    path("coach/programs/<uuid:pk>/days/<uuid:day_id>/exercises/<uuid:wde_id>/", CoachProgramDayExerciseDetailView.as_view(), name="coach-program-day-exercise-detail"),
+    path("coach/clients/<uuid:client_id>/assign-program/", CoachClientAssignProgramView.as_view(), name="coach-client-assign-program"),
+    path("coach/clients/<uuid:client_id>/program/", CoachClientProgramView.as_view(), name="coach-client-program"),
+    # ── Client Workout ──
+    path("workout/today/", WorkoutTodayView.as_view(), name="workout-today"),
+    path("workout/submit/", WorkoutSubmitView.as_view(), name="workout-submit"),
+    path("workout/history/", WorkoutHistoryView.as_view(), name="workout-history"),
 ]

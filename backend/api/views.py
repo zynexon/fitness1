@@ -1726,3 +1726,408 @@ class CoachClientTaskHistoryView(APIView):
             "end_date": end_date,
             "tasks": UserTaskSerializer(tasks, many=True).data
         })
+
+
+# ── Workout System: Coach Endpoints ─────────────────────────────────────────
+
+from .models import (
+    Exercise, Program, WorkoutDay, WorkoutDayExercise,
+    ProgramAssignment, WorkoutLog, WorkoutLogExercise,
+)
+from .serializers import (
+    ExerciseSerializer, ExerciseInputSerializer,
+    ProgramSerializer, ProgramListSerializer, ProgramInputSerializer,
+    WorkoutDaySerializer, WorkoutDayInputSerializer,
+    WorkoutDayExerciseSerializer, WorkoutDayExerciseInputSerializer,
+    AssignProgramInputSerializer, ProgramAssignmentSerializer,
+    WorkoutLogSerializer, SubmitWorkoutLogInputSerializer,
+    WorkoutHistoryQuerySerializer,
+)
+from .services import (
+    WORKOUT_XP_AMOUNT,
+    get_active_program_assignment,
+    get_todays_workout_day,
+    get_or_create_workout_log,
+    submit_workout_log,
+)
+
+
+class CoachExerciseListView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request):
+        exercises = Exercise.objects.filter(coach=request.user)
+        return Response(ExerciseSerializer(exercises, many=True).data)
+
+    def post(self, request):
+        serializer = ExerciseInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        exercise = Exercise.objects.create(
+            coach=request.user,
+            **serializer.validated_data,
+        )
+        return Response(ExerciseSerializer(exercise).data, status=status.HTTP_201_CREATED)
+
+
+class CoachExerciseDetailView(APIView):
+    permission_classes = [IsCoach]
+
+    def _get_exercise(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(Exercise, id=pk, coach=request.user)
+
+    def patch(self, request, pk):
+        exercise = self._get_exercise(request, pk)
+        serializer = ExerciseInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        for key, value in serializer.validated_data.items():
+            setattr(exercise, key, value)
+        exercise.save()
+        return Response(ExerciseSerializer(exercise).data)
+
+    def delete(self, request, pk):
+        exercise = self._get_exercise(request, pk)
+        exercise.delete()
+        return Response({"success": True}, status=status.HTTP_204_NO_CONTENT)
+
+
+class CoachProgramListView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request):
+        programs = Program.objects.filter(coach=request.user)
+        return Response(ProgramListSerializer(programs, many=True).data)
+
+    def post(self, request):
+        serializer = ProgramInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        program = Program.objects.create(
+            coach=request.user,
+            **serializer.validated_data,
+        )
+        return Response(ProgramSerializer(program).data, status=status.HTTP_201_CREATED)
+
+
+class CoachProgramDetailView(APIView):
+    permission_classes = [IsCoach]
+
+    def _get_program(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(
+            Program.objects.prefetch_related(
+                "workout_days__exercises__exercise",
+            ),
+            id=pk,
+            coach=request.user,
+        )
+
+    def get(self, request, pk):
+        program = self._get_program(request, pk)
+        return Response(ProgramSerializer(program).data)
+
+    def patch(self, request, pk):
+        program = self._get_program(request, pk)
+        serializer = ProgramInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        for key, value in serializer.validated_data.items():
+            setattr(program, key, value)
+        program.save()
+        return Response(ProgramSerializer(program).data)
+
+    def delete(self, request, pk):
+        program = self._get_program(request, pk)
+        program.delete()
+        return Response({"success": True}, status=status.HTTP_204_NO_CONTENT)
+
+
+class CoachProgramDayCreateView(APIView):
+    permission_classes = [IsCoach]
+
+    def post(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        program = get_object_or_404(Program, id=pk, coach=request.user)
+
+        serializer = WorkoutDayInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        weekday = serializer.validated_data["weekday"]
+        if WorkoutDay.objects.filter(program=program, weekday=weekday).exists():
+            return Response(
+                {"error": f"This program already has a workout day for {dict(WorkoutDay._meta.get_field('weekday').choices).get(weekday, weekday)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        day = WorkoutDay.objects.create(
+            program=program,
+            **serializer.validated_data,
+        )
+        return Response(WorkoutDaySerializer(day).data, status=status.HTTP_201_CREATED)
+
+
+class CoachProgramDayDetailView(APIView):
+    permission_classes = [IsCoach]
+
+    def _get_day(self, request, pk, day_id):
+        from django.shortcuts import get_object_or_404
+        get_object_or_404(Program, id=pk, coach=request.user)
+        return get_object_or_404(WorkoutDay, id=day_id, program_id=pk)
+
+    def patch(self, request, pk, day_id):
+        day = self._get_day(request, pk, day_id)
+        data = request.data
+        if "title" in data:
+            day.title = data["title"]
+        if "weekday" in data:
+            new_weekday = int(data["weekday"])
+            if new_weekday != day.weekday and WorkoutDay.objects.filter(program_id=pk, weekday=new_weekday).exists():
+                return Response(
+                    {"error": "That weekday is already assigned in this program."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            day.weekday = new_weekday
+        day.save()
+        return Response(WorkoutDaySerializer(day).data)
+
+    def delete(self, request, pk, day_id):
+        day = self._get_day(request, pk, day_id)
+        day.delete()
+        return Response({"success": True}, status=status.HTTP_204_NO_CONTENT)
+
+
+class CoachProgramDayExerciseCreateView(APIView):
+    permission_classes = [IsCoach]
+
+    def post(self, request, pk, day_id):
+        from django.shortcuts import get_object_or_404
+        get_object_or_404(Program, id=pk, coach=request.user)
+        day = get_object_or_404(WorkoutDay, id=day_id, program_id=pk)
+
+        serializer = WorkoutDayExerciseInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        exercise = get_object_or_404(
+            Exercise, id=serializer.validated_data.pop("exercise_id"), coach=request.user,
+        )
+
+        # Auto-set order if not provided (append to end)
+        order = serializer.validated_data.get("order", 0)
+        if order == 0:
+            max_order = WorkoutDayExercise.objects.filter(workout_day=day).count()
+            order = max_order + 1
+
+        wde = WorkoutDayExercise.objects.create(
+            workout_day=day,
+            exercise=exercise,
+            order=order,
+            prescribed_sets=serializer.validated_data.get("prescribed_sets"),
+            prescribed_reps=serializer.validated_data.get("prescribed_reps", ""),
+            notes=serializer.validated_data.get("notes", ""),
+        )
+        return Response(WorkoutDayExerciseSerializer(wde).data, status=status.HTTP_201_CREATED)
+
+
+class CoachProgramDayExerciseDetailView(APIView):
+    permission_classes = [IsCoach]
+
+    def _get_wde(self, request, pk, day_id, wde_id):
+        from django.shortcuts import get_object_or_404
+        get_object_or_404(Program, id=pk, coach=request.user)
+        get_object_or_404(WorkoutDay, id=day_id, program_id=pk)
+        return get_object_or_404(WorkoutDayExercise, id=wde_id, workout_day_id=day_id)
+
+    def patch(self, request, pk, day_id, wde_id):
+        wde = self._get_wde(request, pk, day_id, wde_id)
+        data = request.data
+        for field in ("order", "prescribed_sets", "prescribed_reps", "notes"):
+            if field in data:
+                setattr(wde, field, data[field])
+        wde.save()
+        return Response(WorkoutDayExerciseSerializer(wde).data)
+
+    def delete(self, request, pk, day_id, wde_id):
+        wde = self._get_wde(request, pk, day_id, wde_id)
+        wde.delete()
+        return Response({"success": True}, status=status.HTTP_204_NO_CONTENT)
+
+
+class CoachClientAssignProgramView(APIView):
+    permission_classes = [IsCoach]
+
+    @transaction.atomic
+    def post(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+
+        serializer = AssignProgramInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        program = get_object_or_404(
+            Program, id=serializer.validated_data["program_id"], coach=request.user,
+        )
+        start_date = serializer.validated_data.get("start_date") or timezone.localdate()
+
+        # Deactivate any previous active assignments for this client
+        ProgramAssignment.objects.filter(client=client, is_active=True).update(is_active=False)
+
+        assignment = ProgramAssignment.objects.create(
+            client=client,
+            program=program,
+            assigned_by=request.user,
+            start_date=start_date,
+            is_active=True,
+        )
+        return Response(ProgramAssignmentSerializer(assignment).data, status=status.HTTP_201_CREATED)
+
+
+class CoachClientProgramView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        import datetime
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+
+        assignment = get_active_program_assignment(client)
+        if not assignment:
+            return Response({"has_active_program": False, "assignment": None, "workout_history": []})
+
+        # Recent workout history (last 28 days)
+        end_date = timezone.localdate()
+        start_date = end_date - datetime.timedelta(days=27)
+        logs = (
+            WorkoutLog.objects.filter(
+                user=client,
+                date__gte=start_date,
+                date__lte=end_date,
+            )
+            .select_related("workout_day")
+            .prefetch_related(
+                "exercise_logs__workout_day_exercise__exercise",
+            )
+            .order_by("-date")
+        )
+
+        return Response({
+            "has_active_program": True,
+            "assignment": ProgramAssignmentSerializer(assignment).data,
+            "workout_history": WorkoutLogSerializer(logs, many=True).data,
+        })
+
+    def delete(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+        ProgramAssignment.objects.filter(client=client, is_active=True).update(is_active=False)
+        return Response({"success": True})
+
+
+# ── Workout System: Client Endpoints ────────────────────────────────────────
+
+class WorkoutTodayView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        assignment = get_active_program_assignment(request.user)
+        has_active_program = assignment is not None
+
+        workout_day = get_todays_workout_day(request.user)
+        if not workout_day:
+            return Response({
+                "rest_day": True,
+                "has_active_program": has_active_program,
+            })
+
+        log, _ = get_or_create_workout_log(request.user, workout_day)
+
+        # Re-fetch the log with full prefetch for serialization
+        log = (
+            WorkoutLog.objects.filter(id=log.id)
+            .select_related("workout_day")
+            .prefetch_related(
+                "exercise_logs__workout_day_exercise__exercise",
+            )
+            .first()
+        )
+
+        return Response({
+            "rest_day": False,
+            "has_active_program": True,
+            "workout_log": WorkoutLogSerializer(log).data,
+        })
+
+
+class WorkoutSubmitView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = SubmitWorkoutLogInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        log_id = serializer.validated_data["workout_log_id"]
+        try:
+            workout_log = WorkoutLog.objects.select_related("workout_day").get(
+                id=log_id, user=request.user,
+            )
+        except WorkoutLog.DoesNotExist:
+            return Response(
+                {"error": "Workout log not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        exercise_updates = serializer.validated_data["exercises"]
+        xp_awarded = submit_workout_log(request.user, workout_log, exercise_updates)
+
+        # Refresh user and log for response
+        user = User.objects.get(id=request.user.id)
+        workout_log.refresh_from_db()
+
+        # Re-fetch with prefetch for full serialization
+        workout_log = (
+            WorkoutLog.objects.filter(id=workout_log.id)
+            .select_related("workout_day")
+            .prefetch_related(
+                "exercise_logs__workout_day_exercise__exercise",
+            )
+            .first()
+        )
+
+        return Response({
+            "success": True,
+            "workout_log": WorkoutLogSerializer(workout_log).data,
+            "xp_awarded": xp_awarded,
+            "total_xp": user.xp,
+            "level": user.level,
+            "streak": user.streak,
+        })
+
+
+class WorkoutHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import datetime
+        query_serializer = WorkoutHistoryQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+
+        days_range = query_serializer.validated_data.get("range", 28)
+        end_date = timezone.localdate()
+        start_date = end_date - datetime.timedelta(days=days_range - 1)
+
+        logs = (
+            WorkoutLog.objects.filter(
+                user=request.user,
+                date__gte=start_date,
+                date__lte=end_date,
+            )
+            .select_related("workout_day")
+            .prefetch_related(
+                "exercise_logs__workout_day_exercise__exercise",
+            )
+            .order_by("-date")
+        )
+
+        return Response({
+            "start_date": start_date,
+            "end_date": end_date,
+            "logs": WorkoutLogSerializer(logs, many=True).data,
+        })
