@@ -503,3 +503,209 @@ class WorkoutSystemTests(TestCase):
         data = today_res.json()
         self.assertTrue(data["rest_day"])
         self.assertFalse(data["has_active_program"])
+
+
+class BodyMetricsTests(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+        
+        self.coach_email = "bmcoach@example.com"
+        self.coach_password = "Password123!"
+        self.coach = get_user_model().objects.create_user(
+            username=self.coach_email,
+            email=self.coach_email,
+            password=self.coach_password,
+            name="Metrics Coach",
+            is_coach=True,
+        )
+
+        self.client_email = "bmclient@example.com"
+        self.client_password = "Password123!"
+        self.client_user = get_user_model().objects.create_user(
+            username=self.client_email,
+            email=self.client_email,
+            password=self.client_password,
+            name="Metrics Client",
+            coach=self.coach,
+        )
+
+        self.other_client = get_user_model().objects.create_user(
+            username="other@example.com",
+            email="other@example.com",
+            password="Password123!",
+            name="Other Client",
+        )
+
+        self.other_coach = get_user_model().objects.create_user(
+            username="othercoach@example.com",
+            email="othercoach@example.com",
+            password="Password123!",
+            name="Other Coach",
+            is_coach=True,
+        )
+
+    def _auth_client(self, email, password):
+        from rest_framework.test import APIClient
+        api_client = APIClient()
+        res = api_client.post(
+            reverse("auth-login"),
+            data={"username": email, "password": password},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
+        return api_client
+
+    def test_new_client_auto_subscribed_to_weight(self):
+        from .models import MetricDefinition, ClientMetricSubscription
+        from .models import CoachInvite
+        
+        # Test the registration flow hooks
+        invite = CoachInvite.objects.create(coach=self.coach, code='BM_INVITE')
+        api = self._auth_client(self.client_email, self.client_password)
+        
+        # We need an unauthenticated client for registration
+        from rest_framework.test import APIClient
+        anon_api = APIClient()
+        res = anon_api.post(reverse("auth-register"), data={
+            "name": "New Reg Client",
+            "email": "newreg@example.com",
+            "password": "Password123!",
+            "invite_code": "BM_INVITE",
+        }, format="json")
+        
+        self.assertEqual(res.status_code, 201)
+        new_user = get_user_model().objects.get(email="newreg@example.com")
+        
+        weight_metric = MetricDefinition.objects.get(coach=self.coach, is_default_weight=True)
+        sub = ClientMetricSubscription.objects.get(client=new_user, metric_definition=weight_metric)
+        self.assertTrue(sub.is_active)
+
+    def test_coach_create_custom_metric(self):
+        coach_api = self._auth_client(self.coach_email, self.coach_password)
+        res = coach_api.post(reverse("coach-metric-definitions"), data={
+            "name": "Body Fat",
+            "unit": "%"
+        }, format="json")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data["name"], "Body Fat")
+        self.assertEqual(res.data["unit"], "%")
+
+    def test_client_submit_checkin_creates_entry(self):
+        from .models import MetricDefinition
+        weight = MetricDefinition.ensure_default_weight(self.coach)
+        
+        client_api = self._auth_client(self.client_email, self.client_password)
+        res = client_api.post(reverse("metric-entries"), data={
+            "values": [{"metric_definition_id": str(weight.id), "value": 85.5}]
+        }, format="json")
+        
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data["values"]), 1)
+        self.assertEqual(res.data["values"][0]["value"], 85.5)
+
+    def test_client_resubmit_same_date_updates(self):
+        from .models import MetricDefinition, BodyMetricEntry
+        weight = MetricDefinition.ensure_default_weight(self.coach)
+        
+        client_api = self._auth_client(self.client_email, self.client_password)
+        client_api.post(reverse("metric-entries"), data={
+            "values": [{"metric_definition_id": str(weight.id), "value": 85.5}]
+        }, format="json")
+        
+        # Resubmit same date (today default)
+        client_api.post(reverse("metric-entries"), data={
+            "values": [{"metric_definition_id": str(weight.id), "value": 84.0}]
+        }, format="json")
+        
+        # Should only be 1 entry
+        entries = BodyMetricEntry.objects.filter(user=self.client_user)
+        self.assertEqual(entries.count(), 1)
+        self.assertEqual(entries.first().values.first().value, 84.0)
+
+    def test_client_upload_photo(self):
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import ProgressPhoto
+        
+        client_api = self._auth_client(self.client_email, self.client_password)
+        
+        # Create dummy image
+        image_content = b"fake_image_data"
+        image = SimpleUploadedFile("front.jpg", image_content, content_type="image/jpeg")
+        
+        res = client_api.post(reverse("metric-photos"), data={
+            "image": image,
+            "angle": "front"
+        }, format="multipart")
+        
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data["angle"], "front")
+        self.assertEqual(ProgressPhoto.objects.filter(user=self.client_user).count(), 1)
+
+    def test_client_photo_retrievable(self):
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        client_api = self._auth_client(self.client_email, self.client_password)
+        image = SimpleUploadedFile("front.jpg", b"fake", content_type="image/jpeg")
+        client_api.post(reverse("metric-photos"), data={"image": image}, format="multipart")
+        
+        res = client_api.get(reverse("metric-photos"))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data["photos"]), 1)
+
+    def test_privacy_other_client_cannot_access(self):
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        client_api = self._auth_client(self.client_email, self.client_password)
+        image = SimpleUploadedFile("front.jpg", b"fake", content_type="image/jpeg")
+        photo_res = client_api.post(reverse("metric-photos"), data={"image": image}, format="multipart")
+        photo_id = photo_res.data["id"]
+
+        other_client_api = self._auth_client("other@example.com", "Password123!")
+        
+        # Other client's photos should be empty
+        res = other_client_api.get(reverse("metric-photos"))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data["photos"]), 0)
+
+        # Other client trying to delete first client's photo
+        del_res = other_client_api.delete(reverse("metric-photo-detail", kwargs={"pk": photo_id}))
+        self.assertEqual(del_res.status_code, 404)
+
+    def test_privacy_unrelated_coach_cannot_access(self):
+        other_coach_api = self._auth_client("othercoach@example.com", "Password123!")
+        res = other_coach_api.get(reverse("coach-client-metric-entries", kwargs={"client_id": str(self.client_user.id)}))
+        self.assertEqual(res.status_code, 404)
+
+    def test_own_coach_can_access(self):
+        coach_api = self._auth_client(self.coach_email, self.coach_password)
+        res = coach_api.get(reverse("coach-client-metric-entries", kwargs={"client_id": str(self.client_user.id)}))
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("metrics", res.data)
+
+    def test_unauthenticated_blocked(self):
+        from rest_framework.test import APIClient
+        anon_api = APIClient()
+        res = anon_api.get(reverse("metric-entries"))
+        self.assertEqual(res.status_code, 401)
+
+    def test_body_metrics_not_in_leaderboard(self):
+        # Even if a client logs weight, it shouldn't show in leaderboard (which is XP only)
+        # Give client XP to show in leaderboard
+        self.client_user.xp = 1000
+        self.client_user.save()
+        
+        from .models import MetricDefinition, BodyMetricValue, BodyMetricEntry
+        weight = MetricDefinition.ensure_default_weight(self.coach)
+        entry = BodyMetricEntry.objects.create(user=self.client_user, date=timezone.localdate())
+        BodyMetricValue.objects.create(entry=entry, metric_definition=weight, value=85.0)
+
+        client_api = self._auth_client(self.client_email, self.client_password)
+        res = client_api.get(reverse("leaderboard"))
+        self.assertEqual(res.status_code, 200)
+        
+        entries = res.data["entries"]
+        self.assertTrue(len(entries) > 0)
+        self.assertNotIn("weight", entries[0])
+        self.assertNotIn("body_metrics", entries[0])

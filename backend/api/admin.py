@@ -132,3 +132,41 @@ class WorkoutLogAdmin(admin.ModelAdmin):
 @admin.register(WorkoutLogExercise)
 class WorkoutLogExerciseAdmin(admin.ModelAdmin):
 	list_display = ("workout_log", "workout_day_exercise", "completed", "actual_weight", "actual_reps")
+
+
+# ── Body Metrics System ─────────────────────────────────────────────────────
+
+from .models import (
+	MetricDefinition, ClientMetricSubscription,
+	BodyMetricEntry, BodyMetricValue, ProgressPhoto,
+)
+
+
+@admin.register(MetricDefinition)
+class MetricDefinitionAdmin(admin.ModelAdmin):
+	list_display = ("name", "coach", "unit", "is_default_weight", "created_at")
+	list_filter = ("is_default_weight", "coach")
+	search_fields = ("name",)
+
+
+@admin.register(ClientMetricSubscription)
+class ClientMetricSubscriptionAdmin(admin.ModelAdmin):
+	list_display = ("client", "metric_definition", "is_active", "created_at")
+	list_filter = ("is_active",)
+
+
+@admin.register(BodyMetricEntry)
+class BodyMetricEntryAdmin(admin.ModelAdmin):
+	list_display = ("user", "date", "created_at")
+	list_filter = ("date",)
+
+
+@admin.register(BodyMetricValue)
+class BodyMetricValueAdmin(admin.ModelAdmin):
+	list_display = ("entry", "metric_definition", "value")
+
+
+@admin.register(ProgressPhoto)
+class ProgressPhotoAdmin(admin.ModelAdmin):
+	list_display = ("user", "date", "angle", "created_at")
+	list_filter = ("date", "angle")

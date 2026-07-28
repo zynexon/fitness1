@@ -59,6 +59,16 @@ from .views import (
     WorkoutTodayView,
     WorkoutSubmitView,
     WorkoutHistoryView,
+    # Body Metrics system
+    MetricConfigView,
+    BodyMetricEntryView,
+    ProgressPhotoListView,
+    ProgressPhotoDetailView,
+    CoachMetricDefinitionListView,
+    CoachClientMetricConfigView,
+    CoachClientMetricSubscriptionView,
+    CoachClientMetricEntriesView,
+    CoachClientMetricPhotosView,
 )
 
 urlpatterns = [
@@ -125,4 +135,16 @@ urlpatterns = [
     path("workout/today/", WorkoutTodayView.as_view(), name="workout-today"),
     path("workout/submit/", WorkoutSubmitView.as_view(), name="workout-submit"),
     path("workout/history/", WorkoutHistoryView.as_view(), name="workout-history"),
+    # ── Client Body Metrics ──
+    path("metrics/config/", MetricConfigView.as_view(), name="metric-config"),
+    path("metrics/entries/", BodyMetricEntryView.as_view(), name="metric-entries"),
+    path("metrics/photos/", ProgressPhotoListView.as_view(), name="metric-photos"),
+    path("metrics/photos/<uuid:pk>/", ProgressPhotoDetailView.as_view(), name="metric-photo-detail"),
+    # ── Coach Body Metrics ──
+    path("coach/metric-definitions/", CoachMetricDefinitionListView.as_view(), name="coach-metric-definitions"),
+    path("coach/clients/<uuid:client_id>/metrics/config/", CoachClientMetricConfigView.as_view(), name="coach-client-metric-config"),
+    path("coach/clients/<uuid:client_id>/metrics/subscriptions/", CoachClientMetricSubscriptionView.as_view(), name="coach-client-metric-subscriptions"),
+    path("coach/clients/<uuid:client_id>/metrics/entries/", CoachClientMetricEntriesView.as_view(), name="coach-client-metric-entries"),
+    path("coach/clients/<uuid:client_id>/metrics/photos/", CoachClientMetricPhotosView.as_view(), name="coach-client-metric-photos"),
 ]
+

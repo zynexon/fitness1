@@ -36,3 +36,8 @@ class Command(BaseCommand):
                 streak=0,
             )
             self.stdout.write(self.style.SUCCESS(f'Successfully created coach account {email}.'))
+
+        # Seed the default Weight metric for this coach
+        from api.models import MetricDefinition
+        MetricDefinition.ensure_default_weight(user)
+        self.stdout.write(self.style.SUCCESS('Seeded default Weight metric for coach.'))

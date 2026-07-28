@@ -471,3 +471,82 @@ class SubmitWorkoutLogInputSerializer(serializers.Serializer):
 
 class WorkoutHistoryQuerySerializer(serializers.Serializer):
     range = serializers.IntegerField(required=False, min_value=1, max_value=90, default=28)
+
+
+# ── Body Metrics Serializers ────────────────────────────────────────────────
+
+from .models import (
+    MetricDefinition, ClientMetricSubscription,
+    BodyMetricEntry, BodyMetricValue, ProgressPhoto,
+)
+
+
+class MetricDefinitionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MetricDefinition
+        fields = ["id", "name", "unit", "is_default_weight"]
+
+
+class MetricDefinitionInputSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=100)
+    unit = serializers.CharField(max_length=20)
+
+
+class ClientMetricSubscriptionSerializer(serializers.ModelSerializer):
+    metric_definition = MetricDefinitionSerializer(read_only=True)
+
+    class Meta:
+        model = ClientMetricSubscription
+        fields = ["id", "metric_definition", "is_active"]
+
+
+class BodyMetricValueSerializer(serializers.ModelSerializer):
+    """Output serializer — includes metric name/unit for frontend display."""
+    metric_definition_id = serializers.UUIDField(source="metric_definition.id")
+    metric_name = serializers.CharField(source="metric_definition.name")
+    metric_unit = serializers.CharField(source="metric_definition.unit")
+
+    class Meta:
+        model = BodyMetricValue
+        fields = ["metric_definition_id", "metric_name", "metric_unit", "value"]
+
+
+class BodyMetricValueInputSerializer(serializers.Serializer):
+    metric_definition_id = serializers.UUIDField()
+    value = serializers.FloatField()
+
+
+class SubmitBodyMetricEntryInputSerializer(serializers.Serializer):
+    date = serializers.DateField(required=False)
+    values = BodyMetricValueInputSerializer(many=True)
+
+
+class BodyMetricEntrySerializer(serializers.ModelSerializer):
+    values = BodyMetricValueSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = BodyMetricEntry
+        fields = ["id", "date", "values"]
+
+
+class ProgressPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProgressPhoto
+        fields = ["id", "date", "image", "angle", "created_at"]
+
+
+class ProgressPhotoInputSerializer(serializers.Serializer):
+    date = serializers.DateField(required=False)
+    angle = serializers.ChoiceField(
+        choices=["front", "side", "back", "other", ""],
+        required=False,
+        default="",
+    )
+
+
+class MetricEntriesQuerySerializer(serializers.Serializer):
+    range = serializers.IntegerField(required=False, min_value=1, max_value=365, default=90)
+
+
+class MetricPhotosQuerySerializer(serializers.Serializer):
+    range = serializers.IntegerField(required=False, min_value=1, max_value=365, default=90)

@@ -395,6 +395,14 @@ class RegisterView(APIView):
         
         assign_daily_tasks(user)
 
+        # Auto-subscribe new client to coach's default Weight metric
+        # so weight tracking works immediately with zero coach setup.
+        from .models import MetricDefinition, ClientMetricSubscription
+        weight_metric = MetricDefinition.ensure_default_weight(invite.coach)
+        ClientMetricSubscription.objects.get_or_create(
+            client=user, metric_definition=weight_metric,
+        )
+
         return Response(
             {
                 "success": True,
@@ -2130,4 +2138,441 @@ class WorkoutHistoryView(APIView):
             "start_date": start_date,
             "end_date": end_date,
             "logs": WorkoutLogSerializer(logs, many=True).data,
+        })
+
+
+# ── Body Metrics System ─────────────────────────────────────────────────────
+# Privacy: Every read/write of body metrics or photos is restricted to:
+#   1. The owning client themselves
+#   2. That client's own coach (client.coach_id == request.user.id where is_coach)
+# No other user, coach, or public endpoint may access this data.
+# This data NEVER appears in leaderboard queries, other clients' views,
+# or any public-facing serializer.
+# ─────────────────────────────────────────────────────────────────────────────
+
+from collections import defaultdict
+
+from rest_framework.parsers import MultiPartParser, FormParser
+
+from .models import (
+    MetricDefinition, ClientMetricSubscription,
+    BodyMetricEntry, BodyMetricValue, ProgressPhoto,
+)
+from .serializers import (
+    MetricDefinitionSerializer,
+    MetricDefinitionInputSerializer,
+    ClientMetricSubscriptionSerializer,
+    BodyMetricValueSerializer,
+    BodyMetricValueInputSerializer,
+    SubmitBodyMetricEntryInputSerializer,
+    BodyMetricEntrySerializer,
+    ProgressPhotoSerializer,
+    ProgressPhotoInputSerializer,
+    MetricEntriesQuerySerializer,
+    MetricPhotosQuerySerializer,
+)
+
+
+def _build_trend_data(entries_qs):
+    """
+    Transform a queryset of BodyMetricEntry into a dict grouped by
+    metric_definition_id with sorted {date, value} arrays — optimized
+    for frontend line chart rendering.
+    """
+    grouped = defaultdict(lambda: {"metric_name": "", "metric_unit": "", "points": []})
+
+    entries = entries_qs.prefetch_related("values__metric_definition").order_by("date")
+
+    for entry in entries:
+        for val in entry.values.all():
+            md_id = str(val.metric_definition_id)
+            bucket = grouped[md_id]
+            bucket["metric_name"] = val.metric_definition.name
+            bucket["metric_unit"] = val.metric_definition.unit
+            bucket["is_default_weight"] = val.metric_definition.is_default_weight
+            bucket["points"].append({
+                "date": entry.date.isoformat(),
+                "value": val.value,
+            })
+
+    return grouped
+
+
+# ── Client-side endpoints ───────────────────────────────────────────────────
+
+class MetricConfigView(APIView):
+    """
+    GET /api/metrics/config/
+    Returns the client's active metric subscriptions (which metrics to show
+    in the check-in form) + today's saved values if any, so the form can
+    pre-fill for editing.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Ensure the client's coach has a Weight metric and client is subscribed
+        if user.coach_id:
+            weight_metric = MetricDefinition.ensure_default_weight(user.coach)
+            ClientMetricSubscription.objects.get_or_create(
+                client=user, metric_definition=weight_metric,
+            )
+
+        subs = (
+            ClientMetricSubscription.objects
+            .filter(client=user, is_active=True)
+            .select_related("metric_definition")
+        )
+
+        # Fetch today's values if they exist
+        today = timezone.localdate()
+        today_entry = (
+            BodyMetricEntry.objects
+            .filter(user=user, date=today)
+            .prefetch_related("values__metric_definition")
+            .first()
+        )
+
+        today_values = {}
+        if today_entry:
+            for val in today_entry.values.all():
+                today_values[str(val.metric_definition_id)] = val.value
+
+        return Response({
+            "subscriptions": ClientMetricSubscriptionSerializer(subs, many=True).data,
+            "today_values": today_values,
+            "today_date": today.isoformat(),
+        })
+
+
+class BodyMetricEntryView(APIView):
+    """
+    GET  /api/metrics/entries/?range=90  — client's own entry history for trends
+    POST /api/metrics/entries/           — submit/upsert a check-in
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import datetime
+        query_ser = MetricEntriesQuerySerializer(data=request.query_params)
+        query_ser.is_valid(raise_exception=True)
+
+        days_range = query_ser.validated_data.get("range", 90)
+        end_date = timezone.localdate()
+        start_date = end_date - datetime.timedelta(days=days_range - 1)
+
+        entries_qs = BodyMetricEntry.objects.filter(
+            user=request.user,
+            date__gte=start_date,
+            date__lte=end_date,
+        )
+
+        trend_data = _build_trend_data(entries_qs)
+
+        return Response({
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "metrics": trend_data,
+        })
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = SubmitBodyMetricEntryInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        date = serializer.validated_data.get("date") or timezone.localdate()
+        values_data = serializer.validated_data["values"]
+
+        # Upsert the entry (one per user per date)
+        entry, _ = BodyMetricEntry.objects.get_or_create(
+            user=request.user,
+            date=date,
+        )
+
+        # Upsert each value
+        for val_item in values_data:
+            md_id = val_item["metric_definition_id"]
+            try:
+                md = MetricDefinition.objects.get(id=md_id)
+            except MetricDefinition.DoesNotExist:
+                continue
+
+            BodyMetricValue.objects.update_or_create(
+                entry=entry,
+                metric_definition=md,
+                defaults={"value": val_item["value"]},
+            )
+
+        # Re-fetch with related data for the response
+        entry.refresh_from_db()
+        entry_data = BodyMetricEntrySerializer(entry).data
+        # Manually prefetch values
+        entry_data["values"] = BodyMetricValueSerializer(
+            entry.values.select_related("metric_definition"), many=True
+        ).data
+
+        return Response(entry_data, status=status.HTTP_200_OK)
+
+
+class ProgressPhotoListView(APIView):
+    """
+    GET  /api/metrics/photos/?range=90 — client's own photos in date range
+    POST /api/metrics/photos/          — multipart upload (FormData, NOT JSON)
+    """
+    # POST specifically needs multipart/form-data for file upload —
+    # this is the one endpoint in the app that bypasses the standard
+    # JSON-only Content-Type used by authedFetch on the frontend.
+    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import datetime
+        query_ser = MetricPhotosQuerySerializer(data=request.query_params)
+        query_ser.is_valid(raise_exception=True)
+
+        days_range = query_ser.validated_data.get("range", 90)
+        end_date = timezone.localdate()
+        start_date = end_date - datetime.timedelta(days=days_range - 1)
+
+        photos = ProgressPhoto.objects.filter(
+            user=request.user,
+            date__gte=start_date,
+            date__lte=end_date,
+        )
+
+        return Response({
+            "photos": ProgressPhotoSerializer(photos, many=True, context={"request": request}).data,
+        })
+
+    def post(self, request):
+        image_file = request.FILES.get("image")
+        if not image_file:
+            return Response(
+                {"error": "No image file provided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        date_str = request.data.get("date")
+        angle = request.data.get("angle", "")
+
+        if date_str:
+            from datetime import date as date_cls
+            try:
+                photo_date = date_cls.fromisoformat(date_str)
+            except (ValueError, TypeError):
+                photo_date = timezone.localdate()
+        else:
+            photo_date = timezone.localdate()
+
+        photo = ProgressPhoto.objects.create(
+            user=request.user,
+            date=photo_date,
+            image=image_file,
+            angle=angle if angle in ("front", "side", "back", "other") else "",
+        )
+
+        return Response(
+            ProgressPhotoSerializer(photo, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ProgressPhotoDetailView(APIView):
+    """DELETE /api/metrics/photos/<uuid:pk>/ — client can delete their own photo."""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            photo = ProgressPhoto.objects.get(id=pk, user=request.user)
+        except ProgressPhoto.DoesNotExist:
+            return Response(
+                {"error": "Photo not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        photo.image.delete(save=False)  # Delete the actual file
+        photo.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Coach-side endpoints ────────────────────────────────────────────────────
+# All require IsCoach + ownership check: client.coach_id == request.user.id
+
+class CoachMetricDefinitionListView(APIView):
+    """
+    GET  /api/coach/metric-definitions/  — coach's full metric library
+    POST /api/coach/metric-definitions/  — create a new custom metric type
+    """
+    permission_classes = [IsCoach]
+
+    def get(self, request):
+        # Ensure default Weight metric exists
+        MetricDefinition.ensure_default_weight(request.user)
+        metrics = MetricDefinition.objects.filter(coach=request.user)
+        return Response(MetricDefinitionSerializer(metrics, many=True).data)
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = MetricDefinitionInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        name = serializer.validated_data["name"].strip()
+        unit = serializer.validated_data["unit"].strip()
+
+        if MetricDefinition.objects.filter(coach=request.user, name=name).exists():
+            return Response(
+                {"error": f"A metric named '{name}' already exists."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        metric = MetricDefinition.objects.create(
+            coach=request.user,
+            name=name,
+            unit=unit,
+        )
+
+        return Response(
+            MetricDefinitionSerializer(metric).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CoachClientMetricConfigView(APIView):
+    """
+    GET /api/coach/clients/<uuid:client_id>/metrics/config/
+    Returns the client's current metric subscriptions (active + inactive).
+    """
+    permission_classes = [IsCoach]
+
+    def get(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+
+        subs = (
+            ClientMetricSubscription.objects
+            .filter(client=client)
+            .select_related("metric_definition")
+        )
+
+        return Response({
+            "subscriptions": ClientMetricSubscriptionSerializer(subs, many=True).data,
+        })
+
+
+class CoachClientMetricSubscriptionView(APIView):
+    """
+    PATCH /api/coach/clients/<uuid:client_id>/metrics/subscriptions/
+    Body: list of {metric_definition_id, is_active}
+    Bulk-updates which metrics are enabled for this client.
+    """
+    permission_classes = [IsCoach]
+
+    @transaction.atomic
+    def patch(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+
+        items = request.data
+        if not isinstance(items, list):
+            return Response(
+                {"error": "Expected a list of {metric_definition_id, is_active}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        for item in items:
+            md_id = item.get("metric_definition_id")
+            is_active = item.get("is_active", True)
+
+            if not md_id:
+                continue
+
+            # Verify the metric belongs to this coach
+            try:
+                md = MetricDefinition.objects.get(id=md_id, coach=request.user)
+            except MetricDefinition.DoesNotExist:
+                continue
+
+            sub, created = ClientMetricSubscription.objects.get_or_create(
+                client=client,
+                metric_definition=md,
+                defaults={"is_active": is_active},
+            )
+            if not created and sub.is_active != is_active:
+                sub.is_active = is_active
+                sub.save(update_fields=["is_active"])
+
+        # Return updated subscriptions
+        subs = (
+            ClientMetricSubscription.objects
+            .filter(client=client)
+            .select_related("metric_definition")
+        )
+
+        return Response({
+            "subscriptions": ClientMetricSubscriptionSerializer(subs, many=True).data,
+        })
+
+
+class CoachClientMetricEntriesView(APIView):
+    """
+    GET /api/coach/clients/<uuid:client_id>/metrics/entries/?range=90
+    Same shape as the client's own endpoint, ownership-checked.
+    """
+    permission_classes = [IsCoach]
+
+    def get(self, request, client_id):
+        import datetime
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+
+        query_ser = MetricEntriesQuerySerializer(data=request.query_params)
+        query_ser.is_valid(raise_exception=True)
+
+        days_range = query_ser.validated_data.get("range", 90)
+        end_date = timezone.localdate()
+        start_date = end_date - datetime.timedelta(days=days_range - 1)
+
+        entries_qs = BodyMetricEntry.objects.filter(
+            user=client,
+            date__gte=start_date,
+            date__lte=end_date,
+        )
+
+        trend_data = _build_trend_data(entries_qs)
+
+        return Response({
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "metrics": trend_data,
+        })
+
+
+class CoachClientMetricPhotosView(APIView):
+    """
+    GET /api/coach/clients/<uuid:client_id>/metrics/photos/?range=90
+    Same shape as the client's own endpoint, ownership-checked.
+    """
+    permission_classes = [IsCoach]
+
+    def get(self, request, client_id):
+        import datetime
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+
+        query_ser = MetricPhotosQuerySerializer(data=request.query_params)
+        query_ser.is_valid(raise_exception=True)
+
+        days_range = query_ser.validated_data.get("range", 90)
+        end_date = timezone.localdate()
+        start_date = end_date - datetime.timedelta(days=days_range - 1)
+
+        photos = ProgressPhoto.objects.filter(
+            user=client,
+            date__gte=start_date,
+            date__lte=end_date,
+        )
+
+        return Response({
+            "photos": ProgressPhotoSerializer(photos, many=True, context={"request": request}).data,
         })

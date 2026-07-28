@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import CoachBodyMetricsPanel from './CoachBodyMetricsPanel'
 
 import branding from '../../config/branding'
 
@@ -303,6 +304,9 @@ function CoachClientDetailPage({ authedFetch }) {
               <p className="text-sm font-bold text-zinc-400">No workout history.</p>
             )}
           </div>
+
+          {/* Body Metrics Panel */}
+          <CoachBodyMetricsPanel clientId={id} authedFetch={authedFetch} />
         </div>
 
         {/* Right Col */}

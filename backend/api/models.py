@@ -498,3 +498,143 @@ class WorkoutLogExercise(models.Model):
 
 	class Meta:
 		ordering = ["workout_day_exercise__order"]
+
+
+# ── Body Metrics System ─────────────────────────────────────────────────────
+
+ANGLE_CHOICES = [
+	("front", "Front"),
+	("side", "Side"),
+	("back", "Back"),
+	("other", "Other"),
+]
+
+
+class MetricDefinition(models.Model):
+	"""
+	A trackable metric type, coach-owned and reusable across their clients.
+	Examples: Weight (kg), Waist (cm), Chest (in), Left Arm (cm).
+	"""
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	coach = models.ForeignKey(User, on_delete=models.CASCADE, related_name="metric_definitions")
+	name = models.CharField(max_length=100)
+	unit = models.CharField(max_length=20)  # Free text: "kg", "lb", "cm", "in", etc.
+	is_default_weight = models.BooleanField(default=False)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-is_default_weight", "name"]
+		constraints = [
+			models.UniqueConstraint(
+				fields=["coach", "name"],
+				name="unique_metric_definition_per_coach",
+			)
+		]
+
+	def __str__(self):
+		return f"{self.name} ({self.unit}) — {self.coach.email}"
+
+	@classmethod
+	def ensure_default_weight(cls, coach):
+		"""
+		Lazily create the default Weight metric for a coach if one doesn't exist.
+		Every coach should always have at least a Weight metric available.
+		"""
+		metric, _ = cls.objects.get_or_create(
+			coach=coach,
+			is_default_weight=True,
+			defaults={"name": "Weight", "unit": "kg"},
+		)
+		return metric
+
+
+class ClientMetricSubscription(models.Model):
+	"""
+	Which metrics a specific client should see/log. Coach-configurable per client.
+	"""
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	client = models.ForeignKey(User, on_delete=models.CASCADE, related_name="metric_subscriptions")
+	metric_definition = models.ForeignKey(MetricDefinition, on_delete=models.CASCADE, related_name="subscriptions")
+	is_active = models.BooleanField(default=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-metric_definition__is_default_weight", "metric_definition__name"]
+		constraints = [
+			models.UniqueConstraint(
+				fields=["client", "metric_definition"],
+				name="unique_client_metric_subscription",
+			)
+		]
+
+	def __str__(self):
+		return f"{self.client.email} → {self.metric_definition.name}"
+
+
+class BodyMetricEntry(models.Model):
+	"""
+	One check-in instance for a client on a given date.
+	Same upsert pattern as JournalEntry — one entry per day, resubmitting
+	the same date updates values rather than creating a duplicate row.
+	"""
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="body_metric_entries")
+	date = models.DateField()
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-date"]
+		constraints = [
+			models.UniqueConstraint(
+				fields=["user", "date"],
+				name="unique_body_metric_entry_per_user_date",
+			)
+		]
+
+	def __str__(self):
+		return f"{self.user.email} — {self.date}"
+
+
+class BodyMetricValue(models.Model):
+	"""
+	One logged number within a check-in entry (e.g. Weight = 82.5).
+	"""
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	entry = models.ForeignKey(BodyMetricEntry, on_delete=models.CASCADE, related_name="values")
+	metric_definition = models.ForeignKey(MetricDefinition, on_delete=models.CASCADE, related_name="logged_values")
+	value = models.FloatField()
+
+	class Meta:
+		constraints = [
+			models.UniqueConstraint(
+				fields=["entry", "metric_definition"],
+				name="unique_body_metric_value_per_entry_metric",
+			)
+		]
+
+	def __str__(self):
+		return f"{self.metric_definition.name}: {self.value} {self.metric_definition.unit}"
+
+
+class ProgressPhoto(models.Model):
+	"""
+	Progress photo uploaded by a client. No uniqueness constraint on date —
+	a client can upload multiple photos (different angles) for the same day.
+
+	NOTE: The ImageField stores files to MEDIA_ROOT on the local filesystem.
+	Production deployments must configure DEFAULT_FILE_STORAGE to use cloud
+	storage (e.g. django-storages + S3) — local filesystem storage is
+	ephemeral on most hosting platforms.
+	"""
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="progress_photos")
+	date = models.DateField()
+	image = models.ImageField(upload_to="progress_photos/%Y/%m/")
+	angle = models.CharField(max_length=20, blank=True, default="", choices=ANGLE_CHOICES)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-date", "-created_at"]
+
+	def __str__(self):
+		return f"{self.user.email} — {self.date} ({self.angle or 'no angle'})"

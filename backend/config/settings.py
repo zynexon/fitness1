@@ -169,6 +169,15 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Media files (user-uploaded content such as progress photos).
+# NOTE: Production deployments must override DEFAULT_FILE_STORAGE to use
+# cloud storage (e.g. django-storages + S3) — local filesystem storage
+# is ephemeral on most hosting platforms (Heroku, Railway, Render, etc.).
+# Point MEDIA_ROOT at a persistent volume or switch to S3 before deploying.
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+
 AUTH_USER_MODEL = 'api.User'
 
 REST_FRAMEWORK = {

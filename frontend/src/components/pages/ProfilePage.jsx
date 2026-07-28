@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import LegacyArtifactVault from '../LegacyArtifactVault'
+import BodyMetricsPage from './BodyMetricsPage'
 import branding, { getLevelTitle } from '../../config/branding'
 
 // Keep in sync with App.jsx.
@@ -471,6 +472,17 @@ export default function ProfilePage({
     )
   }
 
+  if (activeTab === 'progress') {
+    return (
+      <div className="space-y-4 pt-1">
+        <button onClick={() => setActiveTab('profile')} className="text-zinc-500 hover:text-zinc-900 transition mb-2">
+          ← Back to Profile
+        </button>
+        <BodyMetricsPage authedFetch={authedFetch} />
+      </div>
+    )
+  }
+
   return (
     <section className="space-y-5">
       <div className="relative flex items-center justify-center pt-1">
@@ -591,6 +603,26 @@ export default function ProfilePage({
             className="rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black uppercase tracking-wider text-zinc-950 shadow-lg shadow-amber-500/20 transition hover:from-amber-300 hover:to-orange-400"
           >
             Open Vault
+          </button>
+        </div>
+      </div>
+
+      <div className="relative overflow-hidden rounded-3xl border border-indigo-400/30 bg-gradient-to-br from-indigo-500/3 via-zinc-950 to-zinc-950 p-5">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/70 via-zinc-950/30 to-transparent" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Tracking</p>
+            <h3 className="mt-1 text-2xl font-black text-white">Body Metrics</h3>
+            <p className="mt-1 text-sm font-semibold text-indigo-100/70">
+              Log weight, custom metrics, and view your progress photos.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('progress')}
+            className="rounded-2xl bg-gradient-to-r from-indigo-400 to-blue-500 px-5 py-3 text-sm font-black uppercase tracking-wider text-zinc-950 shadow-lg shadow-indigo-500/20 transition hover:from-indigo-300 hover:to-blue-400"
+          >
+            Check In
           </button>
         </div>
       </div>
