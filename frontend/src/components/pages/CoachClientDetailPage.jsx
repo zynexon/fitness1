@@ -135,8 +135,19 @@ function CoachClientDetailPage({ authedFetch }) {
           ← Back
         </button>
         <div>
-          <h1 className="text-2xl font-black text-zinc-900 tracking-tight">{client.name}</h1>
-          <p className="text-sm font-semibold text-zinc-500">{client.email}</p>
+          <h1 className="text-2xl font-black text-zinc-900 tracking-tight flex items-center gap-3">
+            {client.name}
+            {client.client_group && (
+              <button 
+                onClick={() => navigate('/coach/groups')}
+                className="px-2.5 py-1 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-[10px] font-black uppercase tracking-wider text-zinc-500 transition cursor-pointer"
+                title="View in Groups"
+              >
+                🏷️ {client.client_group.name}
+              </button>
+            )}
+          </h1>
+          <p className="text-sm font-semibold text-zinc-500 mt-1">{client.email}</p>
         </div>
         <div className={`ml-auto px-3 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider ${riskColors[client.risk_level]}`}>
           {riskLabels[client.risk_level]}

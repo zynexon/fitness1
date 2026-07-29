@@ -69,6 +69,13 @@ from .views import (
     CoachClientMetricSubscriptionView,
     CoachClientMetricEntriesView,
     CoachClientMetricPhotosView,
+    # Client Groups
+    CoachGroupListView,
+    CoachGroupDetailView,
+    CoachGroupMemberAddView,
+    CoachGroupMemberRemoveView,
+    CoachGroupAssignProgramView,
+    CoachGroupAssignTaskView,
 )
 
 urlpatterns = [
@@ -120,6 +127,13 @@ urlpatterns = [
     path("coach/clients/<uuid:client_id>/note/", CoachClientNoteView.as_view(), name="coach-client-note"),
     path("coach/clients/<uuid:client_id>/tasks/", CoachClientTaskCreateView.as_view(), name="coach-client-tasks"),
     path("coach/clients/<uuid:client_id>/tasks/history/", CoachClientTaskHistoryView.as_view(), name="coach-client-tasks-history"),
+    # ── Coach Client Groups ──
+    path("coach/groups/", CoachGroupListView.as_view(), name="coach-groups"),
+    path("coach/groups/<uuid:pk>/", CoachGroupDetailView.as_view(), name="coach-group-detail"),
+    path("coach/groups/<uuid:pk>/members/", CoachGroupMemberAddView.as_view(), name="coach-group-members-add"),
+    path("coach/groups/<uuid:pk>/members/<uuid:client_id>/", CoachGroupMemberRemoveView.as_view(), name="coach-group-member-remove"),
+    path("coach/groups/<uuid:pk>/assign-program/", CoachGroupAssignProgramView.as_view(), name="coach-group-assign-program"),
+    path("coach/groups/<uuid:pk>/assign-task/", CoachGroupAssignTaskView.as_view(), name="coach-group-assign-task"),
     # ── Coach Workout / Program Builder ──
     path("coach/exercises/", CoachExerciseListView.as_view(), name="coach-exercises"),
     path("coach/exercises/<uuid:pk>/", CoachExerciseDetailView.as_view(), name="coach-exercise-detail"),

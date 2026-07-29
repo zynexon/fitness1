@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import JoinCoachPage from './components/pages/JoinCoachPage'
 import CoachShell from './components/layout/CoachShell'
 import CoachRosterPage from './components/pages/CoachRosterPage'
+import CoachGroupsPage from './components/pages/coach/CoachGroupsPage'
 import CoachClientDetailPage from './components/pages/CoachClientDetailPage'
 import CoachExerciseLibraryPage from './components/pages/coach/CoachExerciseLibraryPage'
 import CoachProgramsPage from './components/pages/coach/CoachProgramsPage'
@@ -3537,10 +3538,12 @@ function App() {
         activePage={
           location.pathname.includes('/exercises') ? 'exercises' :
           location.pathname.includes('/programs') ? 'programs' :
+          location.pathname.includes('/groups') ? 'groups' :
           location.pathname.includes('/clients') ? 'clients' : 'dashboard'
         }
         onNavigate={(key) => {
           if (key === 'dashboard' || key === 'clients') reactRouterNavigate('/coach/clients')
+          else if (key === 'groups') reactRouterNavigate('/coach/groups')
           else if (key === 'exercises') reactRouterNavigate('/coach/exercises')
           else if (key === 'programs') reactRouterNavigate('/coach/programs')
         }}
@@ -3550,6 +3553,7 @@ function App() {
           <Route path="/coach/programs/:id" element={<CoachProgramBuilderPage authedFetch={authedFetch} />} />
           <Route path="/coach/programs" element={<CoachProgramsPage authedFetch={authedFetch} />} />
           
+          <Route path="/coach/groups" element={<CoachGroupsPage authedFetch={authedFetch} />} />
           <Route path="/coach/clients/:id" element={<CoachClientDetailPage authedFetch={authedFetch} />} />
           <Route path="/coach/clients" element={<CoachRosterPage authedFetch={authedFetch} />} />
           <Route path="*" element={<CoachRosterPage authedFetch={authedFetch} />} />

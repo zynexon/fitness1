@@ -1324,3 +1324,101 @@ def submit_workout_log(user, workout_log, exercise_updates):
         user.refresh_from_db()
 
     return xp_awarded
+
+
+# ── Client Group / Bulk Assignment ──────────────────────────────────────────
+
+def assign_program_to_client(client, program, start_date, assigned_by):
+    """
+    Assign a program to a single client. Deactivates any previous active
+    ProgramAssignment for this client first (one active at a time).
+
+    This is the canonical assignment logic — used by both the single-client
+    endpoint and the group bulk-assignment endpoint.
+    """
+    from .models import ProgramAssignment
+
+    start_date = start_date or timezone.localdate()
+
+    # Deactivate any previous active assignments for this client
+    ProgramAssignment.objects.filter(
+        client=client, is_active=True,
+    ).update(is_active=False)
+
+    assignment = ProgramAssignment.objects.create(
+        client=client,
+        program=program,
+        assigned_by=assigned_by,
+        start_date=start_date,
+        is_active=True,
+    )
+    return assignment
+
+
+def create_client_task(client, title, category, target_date):
+    """
+    Create an ad-hoc (coach-assigned) task for a single client.
+
+    This is the canonical task-creation logic — used by both the single-client
+    endpoint and the group bulk-assignment endpoint.
+    """
+
+    target_date = target_date or timezone.localdate()
+    category = category or "general"
+
+    task_obj, _ = Task.objects.get_or_create(
+        title=f"{CUSTOM_TASK_PREFIX}{title}",
+        defaults={
+            "xp": TASK_XP_AMOUNT,
+            "category": category,
+        },
+    )
+
+    user_task = UserTask.objects.create(
+        user=client,
+        task=task_obj,
+        date=target_date,
+        completed=False,
+        is_custom=True,
+        custom_title=title,
+        custom_category=category,
+    )
+    return user_task
+
+
+@transaction.atomic
+def assign_program_to_group(coach, group, program, start_date, assigned_by):
+    """
+    Bulk-assign a program to every client currently in the group.
+    Each client is assigned identically to individual assignment.
+    Returns {assigned_count, client_ids}.
+    """
+    clients = User.objects.filter(client_group=group, coach=coach)
+    assigned_ids = []
+    for client in clients:
+        assign_program_to_client(client, program, start_date, assigned_by)
+        assigned_ids.append(str(client.id))
+
+    return {
+        "assigned_count": len(assigned_ids),
+        "client_ids": assigned_ids,
+    }
+
+
+@transaction.atomic
+def assign_task_to_group(coach, group, title, category, target_date):
+    """
+    Bulk-create an ad-hoc task for every client currently in the group.
+    Each client receives the task identically to individual creation.
+    Returns {assigned_count, client_ids}.
+    """
+    clients = User.objects.filter(client_group=group, coach=coach)
+    assigned_ids = []
+    for client in clients:
+        create_client_task(client, title, category, target_date)
+        assigned_ids.append(str(client.id))
+
+    return {
+        "assigned_count": len(assigned_ids),
+        "client_ids": assigned_ids,
+    }

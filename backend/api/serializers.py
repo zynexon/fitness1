@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import CoachInvite, JournalEntry, User, UserTask
+from .models import ClientGroup, CoachInvite, JournalEntry, User, UserTask
 from .services import CUSTOM_TASK_PREFIX
 
 
@@ -247,12 +247,20 @@ class CoachInviteSerializer(serializers.ModelSerializer):
         return f"/join/{obj.code}"
 
 
+class ClientGroupBriefSerializer(serializers.ModelSerializer):
+    """Lightweight id+name for embedding in roster rows."""
+    class Meta:
+        model = ClientGroup
+        fields = ["id", "name"]
+
+
 class ClientRosterSerializer(serializers.ModelSerializer):
     days_since_active = serializers.SerializerMethodField()
     week_adherence_pct = serializers.FloatField(read_only=True, default=0.0)
     prev_week_adherence_pct = serializers.FloatField(read_only=True, default=0.0)
     adherence_trend = serializers.CharField(read_only=True, default="stable")
     risk_level = serializers.CharField(read_only=True, default="on_track")
+    client_group = ClientGroupBriefSerializer(read_only=True)
 
     class Meta:
         model = User
@@ -270,6 +278,7 @@ class ClientRosterSerializer(serializers.ModelSerializer):
             "adherence_trend",
             "risk_level",
             "streak_shields",
+            "client_group",
         ]
 
     def get_days_since_active(self, obj):
@@ -313,6 +322,57 @@ class CreateClientTaskInputSerializer(serializers.Serializer):
 class ClientTaskHistoryQuerySerializer(serializers.Serializer):
     date = serializers.DateField(required=False)
     range = serializers.IntegerField(required=False, min_value=1, max_value=30, default=7)
+
+
+# ── Client Group Serializers ────────────────────────────────────────────────
+
+class ClientGroupSerializer(serializers.ModelSerializer):
+    """List view — includes member_count annotation."""
+    member_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = ClientGroup
+        fields = ["id", "name", "description", "member_count", "created_at"]
+
+
+class ClientGroupDetailSerializer(serializers.ModelSerializer):
+    """Detail view — includes full member list with roster shape."""
+    members = ClientRosterSerializer(many=True, read_only=True)
+    member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClientGroup
+        fields = ["id", "name", "description", "members", "member_count", "created_at"]
+
+    def get_member_count(self, obj):
+        return obj.members.count()
+
+
+class ClientGroupInputSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class AddGroupMembersInputSerializer(serializers.Serializer):
+    client_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+    )
+
+
+class AssignProgramToGroupInputSerializer(serializers.Serializer):
+    program_id = serializers.UUIDField()
+    start_date = serializers.DateField(required=False)
+
+
+class AssignTaskToGroupInputSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255)
+    category = serializers.ChoiceField(
+        choices=["study", "fitness", "discipline", "work", "logic", "general"],
+        required=False,
+        default="general",
+    )
+    date = serializers.DateField(required=False)
 
 
 # ── Workout System Serializers ──────────────────────────────────────────────

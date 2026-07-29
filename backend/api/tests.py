@@ -709,3 +709,326 @@ class BodyMetricsTests(TestCase):
         self.assertTrue(len(entries) > 0)
         self.assertNotIn("weight", entries[0])
         self.assertNotIn("body_metrics", entries[0])
+
+
+class ClientGroupTests(TestCase):
+    """Tests for client grouping/cohorts (Phase 6)."""
+
+    def setUp(self):
+        from .models import CoachInvite, Program
+        self.coach_email = "coach@groups.com"
+        self.coach_password = "Password123!"
+        self.coach = get_user_model().objects.create_user(
+            username=self.coach_email,
+            email=self.coach_email,
+            password=self.coach_password,
+            name="GroupCoach",
+            is_coach=True,
+        )
+        # Create 3 client users under this coach
+        self.clients = []
+        for i in range(3):
+            email = f"client{i}@groups.com"
+            u = get_user_model().objects.create_user(
+                username=email,
+                email=email,
+                password="Password123!",
+                name=f"Client {i}",
+                coach=self.coach,
+            )
+            self.clients.append(u)
+
+        # Create a program for bulk assignment testing
+        self.program = Program.objects.create(
+            coach=self.coach,
+            name="Test Program",
+        )
+
+    def _auth_coach(self):
+        from rest_framework.test import APIClient
+        api = APIClient()
+        api.force_authenticate(user=self.coach)
+        return api
+
+    def _auth_client_user(self, user):
+        from rest_framework.test import APIClient
+        api = APIClient()
+        api.force_authenticate(user=user)
+        return api
+
+    def test_create_group_and_add_clients(self):
+        api = self._auth_coach()
+        # Create group
+        res = api.post(reverse("coach-groups"), data={
+            "name": "Spring Shred Cohort",
+            "description": "Q2 shred clients",
+        }, format="json")
+        self.assertEqual(res.status_code, 201)
+        group_id = res.data["id"]
+        self.assertEqual(res.data["name"], "Spring Shred Cohort")
+
+        # Add 2 clients
+        res = api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_id}),
+            data={"client_ids": [str(self.clients[0].id), str(self.clients[1].id)]},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["added_count"], 2)
+
+        # Verify group detail shows 2 members
+        res = api.get(reverse("coach-group-detail", kwargs={"pk": group_id}))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["member_count"], 2)
+
+    def test_moving_client_between_groups(self):
+        from .models import ClientGroup
+        api = self._auth_coach()
+
+        # Create two groups
+        res_a = api.post(reverse("coach-groups"), data={"name": "Group A"}, format="json")
+        res_b = api.post(reverse("coach-groups"), data={"name": "Group B"}, format="json")
+        group_a_id = res_a.data["id"]
+        group_b_id = res_b.data["id"]
+
+        # Add client 0 to Group A
+        api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_a_id}),
+            data={"client_ids": [str(self.clients[0].id)]},
+            format="json",
+        )
+        self.clients[0].refresh_from_db()
+        self.assertEqual(str(self.clients[0].client_group_id), group_a_id)
+
+        # Move client 0 to Group B (just reassign FK)
+        api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_b_id}),
+            data={"client_ids": [str(self.clients[0].id)]},
+            format="json",
+        )
+        self.clients[0].refresh_from_db()
+        self.assertEqual(str(self.clients[0].client_group_id), group_b_id)
+
+        # Group A should have 0 members, Group B should have 1
+        res_a = api.get(reverse("coach-group-detail", kwargs={"pk": group_a_id}))
+        self.assertEqual(res_a.data["member_count"], 0)
+        res_b = api.get(reverse("coach-group-detail", kwargs={"pk": group_b_id}))
+        self.assertEqual(res_b.data["member_count"], 1)
+
+    def test_assign_program_to_group_creates_per_client_assignments(self):
+        from .models import ProgramAssignment
+        api = self._auth_coach()
+
+        # Create group with 2 clients
+        res = api.post(reverse("coach-groups"), data={"name": "Prog Group"}, format="json")
+        group_id = res.data["id"]
+        api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_id}),
+            data={"client_ids": [str(c.id) for c in self.clients[:2]]},
+            format="json",
+        )
+
+        # Bulk assign program
+        res = api.post(
+            reverse("coach-group-assign-program", kwargs={"pk": group_id}),
+            data={"program_id": str(self.program.id)},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["assigned_count"], 2)
+
+        # Each client should have an active ProgramAssignment
+        for c in self.clients[:2]:
+            self.assertTrue(
+                ProgramAssignment.objects.filter(
+                    client=c, program=self.program, is_active=True,
+                ).exists()
+            )
+
+        # Previous active assignment deactivation check: assign again
+        from .models import Program
+        program2 = Program.objects.create(coach=self.coach, name="Program 2")
+        res = api.post(
+            reverse("coach-group-assign-program", kwargs={"pk": group_id}),
+            data={"program_id": str(program2.id)},
+            format="json",
+        )
+        self.assertEqual(res.data["assigned_count"], 2)
+        # Original assignment should be deactivated for each client
+        for c in self.clients[:2]:
+            old = ProgramAssignment.objects.filter(
+                client=c, program=self.program,
+            ).first()
+            self.assertFalse(old.is_active)
+            new = ProgramAssignment.objects.filter(
+                client=c, program=program2, is_active=True,
+            ).first()
+            self.assertIsNotNone(new)
+
+    def test_assign_task_to_group_creates_per_client_tasks(self):
+        from .models import UserTask
+        api = self._auth_coach()
+
+        # Create group with all 3 clients
+        res = api.post(reverse("coach-groups"), data={"name": "Task Group"}, format="json")
+        group_id = res.data["id"]
+        api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_id}),
+            data={"client_ids": [str(c.id) for c in self.clients]},
+            format="json",
+        )
+
+        # Bulk assign task
+        res = api.post(
+            reverse("coach-group-assign-task", kwargs={"pk": group_id}),
+            data={"title": "Do 50 pushups", "category": "fitness"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["assigned_count"], 3)
+
+        # Each client should have the task
+        for c in self.clients:
+            self.assertTrue(
+                UserTask.objects.filter(
+                    user=c, custom_title="Do 50 pushups",
+                ).exists()
+            )
+
+    def test_client_added_after_assignment_does_not_retroactively_receive(self):
+        from .models import ProgramAssignment, UserTask
+        api = self._auth_coach()
+
+        # Create group with 2 clients, leave client[2] out
+        res = api.post(reverse("coach-groups"), data={"name": "Early Group"}, format="json")
+        group_id = res.data["id"]
+        api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_id}),
+            data={"client_ids": [str(c.id) for c in self.clients[:2]]},
+            format="json",
+        )
+
+        # Bulk assign program & task
+        api.post(
+            reverse("coach-group-assign-program", kwargs={"pk": group_id}),
+            data={"program_id": str(self.program.id)},
+            format="json",
+        )
+        api.post(
+            reverse("coach-group-assign-task", kwargs={"pk": group_id}),
+            data={"title": "Run 5k"},
+            format="json",
+        )
+
+        # Now add client[2] to the group AFTER assignment
+        api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_id}),
+            data={"client_ids": [str(self.clients[2].id)]},
+            format="json",
+        )
+
+        # client[2] should NOT have the program or task
+        self.assertFalse(
+            ProgramAssignment.objects.filter(client=self.clients[2]).exists()
+        )
+        self.assertFalse(
+            UserTask.objects.filter(user=self.clients[2], custom_title="Run 5k").exists()
+        )
+
+    def test_deleting_group_clears_membership_preserves_assignments(self):
+        from .models import ProgramAssignment
+        api = self._auth_coach()
+
+        # Create group, add clients, assign program
+        res = api.post(reverse("coach-groups"), data={"name": "Doomed Group"}, format="json")
+        group_id = res.data["id"]
+        api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_id}),
+            data={"client_ids": [str(c.id) for c in self.clients[:2]]},
+            format="json",
+        )
+        api.post(
+            reverse("coach-group-assign-program", kwargs={"pk": group_id}),
+            data={"program_id": str(self.program.id)},
+            format="json",
+        )
+
+        # Delete the group
+        res = api.delete(reverse("coach-group-detail", kwargs={"pk": group_id}))
+        self.assertEqual(res.status_code, 204)
+
+        # Members' client_group should be null
+        for c in self.clients[:2]:
+            c.refresh_from_db()
+            self.assertIsNone(c.client_group)
+
+        # But their ProgramAssignment should still exist
+        for c in self.clients[:2]:
+            self.assertTrue(
+                ProgramAssignment.objects.filter(
+                    client=c, program=self.program,
+                ).exists()
+            )
+
+    def test_non_coach_gets_403_on_group_endpoints(self):
+        from rest_framework.test import APIClient
+        non_coach_api = APIClient()
+        non_coach_api.force_authenticate(user=self.clients[0])
+
+        res = non_coach_api.get(reverse("coach-groups"))
+        self.assertEqual(res.status_code, 403)
+
+        res = non_coach_api.post(
+            reverse("coach-groups"),
+            data={"name": "Hacker Group"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_coach_cannot_access_other_coaches_group(self):
+        from rest_framework.test import APIClient
+        from .models import ClientGroup
+        # Create another coach
+        other_coach = get_user_model().objects.create_user(
+            username="other_coach@groups.com",
+            email="other_coach@groups.com",
+            password="Password123!",
+            name="Other Coach",
+            is_coach=True,
+        )
+        other_api = APIClient()
+        other_api.force_authenticate(user=other_coach)
+
+        # First coach creates a group
+        api = self._auth_coach()
+        res = api.post(reverse("coach-groups"), data={"name": "My Group"}, format="json")
+        group_id = res.data["id"]
+
+        # Other coach tries to access it
+        res = other_api.get(reverse("coach-group-detail", kwargs={"pk": group_id}))
+        self.assertEqual(res.status_code, 404)
+
+    def test_roster_includes_group_and_filter_works(self):
+        api = self._auth_coach()
+
+        # Create group and add 1 client
+        res = api.post(reverse("coach-groups"), data={"name": "Filter Test"}, format="json")
+        group_id = res.data["id"]
+        api.post(
+            reverse("coach-group-members-add", kwargs={"pk": group_id}),
+            data={"client_ids": [str(self.clients[0].id)]},
+            format="json",
+        )
+
+        # Fetch roster without filter — should have all 3
+        res = api.get(reverse("coach-clients"))
+        self.assertEqual(len(res.data), 3)
+        # The grouped client should have client_group populated
+        grouped = next(c for c in res.data if c["id"] == str(self.clients[0].id))
+        self.assertIsNotNone(grouped["client_group"])
+        self.assertEqual(grouped["client_group"]["name"], "Filter Test")
+
+        # Fetch roster with group filter — should have only 1
+        res = api.get(reverse("coach-clients") + f"?group={group_id}")
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]["id"], str(self.clients[0].id))

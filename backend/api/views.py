@@ -51,9 +51,13 @@ from .serializers import (
 from .services import (
     award_shield_for_perfect_week,
     assign_daily_tasks,
+    assign_program_to_client,
+    assign_program_to_group,
+    assign_task_to_group,
     calculate_game_session_xp_for_type,
     check_and_award_daily_challenge,
     check_streak_on_login,
+    create_client_task,
     create_xp_log,
     get_today_completed_task_count,
     get_daily_challenge_status,
@@ -1591,7 +1595,13 @@ class CoachClientListView(APIView):
 
     def get(self, request):
         from .services import get_week_adherence, compute_client_risk_level, get_current_week_window
-        clients = request.user.clients.all()
+        clients = request.user.clients.select_related('client_group').all()
+
+        # Optional group filter
+        group_id = request.query_params.get("group")
+        if group_id:
+            clients = clients.filter(client_group_id=group_id)
+
         serializer = ClientRosterSerializer(clients, many=True)
         data = serializer.data
         
@@ -1692,23 +1702,7 @@ class CoachClientTaskCreateView(APIView):
         category = serializer.validated_data.get("category", "general")
         target_date = serializer.validated_data.get("date") or timezone.localtime().date()
         
-        task, _ = Task.objects.get_or_create(
-            title=f"{CUSTOM_TASK_PREFIX}{title}",
-            defaults={
-                "xp": TASK_XP_AMOUNT,
-                "category": category,
-            },
-        )
-        
-        user_task = UserTask.objects.create(
-            user=client,
-            task=task,
-            date=target_date,
-            completed=False,
-            is_custom=True,
-            custom_title=title,
-            custom_category=category,
-        )
+        user_task = create_client_task(client, title, category, target_date)
         
         return Response(UserTaskSerializer(user_task).data, status=status.HTTP_201_CREATED)
 
@@ -1734,6 +1728,155 @@ class CoachClientTaskHistoryView(APIView):
             "end_date": end_date,
             "tasks": UserTaskSerializer(tasks, many=True).data
         })
+
+
+# ── Client Groups: Coach Endpoints ──────────────────────────────────────────
+
+from .models import ClientGroup
+from .serializers import (
+    ClientGroupSerializer, ClientGroupDetailSerializer,
+    ClientGroupInputSerializer, AddGroupMembersInputSerializer,
+    AssignProgramToGroupInputSerializer, AssignTaskToGroupInputSerializer,
+)
+
+
+class CoachGroupListView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request):
+        groups = (
+            ClientGroup.objects
+            .filter(coach=request.user)
+            .annotate(member_count=Count("members"))
+        )
+        return Response(ClientGroupSerializer(groups, many=True).data)
+
+    def post(self, request):
+        serializer = ClientGroupInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        group = ClientGroup.objects.create(
+            coach=request.user,
+            **serializer.validated_data,
+        )
+        return Response(
+            ClientGroupSerializer(group).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CoachGroupDetailView(APIView):
+    permission_classes = [IsCoach]
+
+    def _get_group(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(ClientGroup, id=pk, coach=request.user)
+
+    def get(self, request, pk):
+        group = self._get_group(request, pk)
+        return Response(ClientGroupDetailSerializer(group).data)
+
+    def patch(self, request, pk):
+        group = self._get_group(request, pk)
+        serializer = ClientGroupInputSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        for key, value in serializer.validated_data.items():
+            setattr(group, key, value)
+        group.save()
+        return Response(ClientGroupDetailSerializer(group).data)
+
+    def delete(self, request, pk):
+        group = self._get_group(request, pk)
+        # SET_NULL on FK handles clearing client_group for all members
+        group.delete()
+        return Response({"success": True}, status=status.HTTP_204_NO_CONTENT)
+
+
+class CoachGroupMemberAddView(APIView):
+    permission_classes = [IsCoach]
+
+    def post(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        group = get_object_or_404(ClientGroup, id=pk, coach=request.user)
+
+        serializer = AddGroupMembersInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        client_ids = serializer.validated_data["client_ids"]
+        # Only update clients that belong to this coach
+        updated = User.objects.filter(
+            id__in=client_ids,
+            coach=request.user,
+        ).update(client_group=group)
+
+        return Response({
+            "added_count": updated,
+            "group_id": str(group.id),
+        })
+
+
+class CoachGroupMemberRemoveView(APIView):
+    permission_classes = [IsCoach]
+
+    def delete(self, request, pk, client_id):
+        from django.shortcuts import get_object_or_404
+        group = get_object_or_404(ClientGroup, id=pk, coach=request.user)
+        client = get_object_or_404(
+            User, id=client_id, coach=request.user, client_group=group,
+        )
+        client.client_group = None
+        client.save(update_fields=["client_group"])
+        return Response({"success": True}, status=status.HTTP_204_NO_CONTENT)
+
+
+class CoachGroupAssignProgramView(APIView):
+    permission_classes = [IsCoach]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        group = get_object_or_404(ClientGroup, id=pk, coach=request.user)
+
+        serializer = AssignProgramToGroupInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        program = get_object_or_404(
+            Program, id=serializer.validated_data["program_id"], coach=request.user,
+        )
+        start_date = serializer.validated_data.get("start_date") or timezone.localdate()
+
+        result = assign_program_to_group(
+            coach=request.user,
+            group=group,
+            program=program,
+            start_date=start_date,
+            assigned_by=request.user,
+        )
+        return Response(result)
+
+
+class CoachGroupAssignTaskView(APIView):
+    permission_classes = [IsCoach]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        group = get_object_or_404(ClientGroup, id=pk, coach=request.user)
+
+        serializer = AssignTaskToGroupInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        title = serializer.validated_data["title"]
+        category = serializer.validated_data.get("category", "general")
+        target_date = serializer.validated_data.get("date") or timezone.localdate()
+
+        result = assign_task_to_group(
+            coach=request.user,
+            group=group,
+            title=title,
+            category=category,
+            target_date=target_date,
+        )
+        return Response(result)
 
 
 # ── Workout System: Coach Endpoints ─────────────────────────────────────────
@@ -1974,16 +2117,7 @@ class CoachClientAssignProgramView(APIView):
         )
         start_date = serializer.validated_data.get("start_date") or timezone.localdate()
 
-        # Deactivate any previous active assignments for this client
-        ProgramAssignment.objects.filter(client=client, is_active=True).update(is_active=False)
-
-        assignment = ProgramAssignment.objects.create(
-            client=client,
-            program=program,
-            assigned_by=request.user,
-            start_date=start_date,
-            is_active=True,
-        )
+        assignment = assign_program_to_client(client, program, start_date, request.user)
         return Response(ProgramAssignmentSerializer(assignment).data, status=status.HTTP_201_CREATED)
 
 

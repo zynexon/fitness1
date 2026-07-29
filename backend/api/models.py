@@ -35,6 +35,7 @@ class User(AbstractUser):
 	is_coach = models.BooleanField(default=False)
 	coach = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
 	coach_note = models.TextField(blank=True, default="")
+	client_group = models.ForeignKey('ClientGroup', on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
 
 
 class CoachInvite(models.Model):
@@ -49,6 +50,20 @@ class CoachInvite(models.Model):
 
 	def __str__(self):
 		return f"Invite {self.code} by {self.coach.email}"
+
+
+class ClientGroup(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	coach = models.ForeignKey(User, on_delete=models.CASCADE, related_name='client_groups')
+	name = models.CharField(max_length=255)
+	description = models.TextField(blank=True, default="")
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-created_at"]
+
+	def __str__(self):
+		return f"{self.name} (coach: {self.coach.email})"
 
 
 class Task(models.Model):

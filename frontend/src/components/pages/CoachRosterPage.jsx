@@ -14,9 +14,13 @@ function CoachRosterPage({ authedFetch }) {
   const [inviteLoading, setInviteLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  const [groups, setGroups] = useState([])
+  const [selectedGroupId, setSelectedGroupId] = useState('')
+
   const fetchRoster = async () => {
     try {
-      const data = await authedFetch('/api/coach/clients/')
+      const url = selectedGroupId ? `/api/coach/clients/?group=${selectedGroupId}` : '/api/coach/clients/'
+      const data = await authedFetch(url)
       setClients(data)
     } catch (err) {
       setError(err.message || 'Failed to fetch roster.')
@@ -25,9 +29,23 @@ function CoachRosterPage({ authedFetch }) {
     }
   }
 
+  const fetchGroups = async () => {
+    try {
+      const data = await authedFetch('/api/coach/groups/')
+      setGroups(data)
+    } catch (err) {
+      // Ignore
+    }
+  }
+
+  useEffect(() => {
+    fetchGroups()
+  }, [])
+
   useEffect(() => {
     fetchRoster()
-  }, [])
+  }, [selectedGroupId])
+
 
   const fetchInvite = async () => {
     setInviteLoading(true)
@@ -103,16 +121,30 @@ function CoachRosterPage({ authedFetch }) {
           <h1 className="text-2xl font-black text-zinc-900 tracking-tight">Roster</h1>
           <p className="text-sm font-semibold text-zinc-500">Monitor your clients' adherence and risk levels.</p>
         </div>
-        <button
-          onClick={() => {
-            setShowInviteModal(true)
-            handleRegenerateInvite()
-          }}
-          className="flex items-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-xs font-black uppercase tracking-wider text-white shadow-sm transition hover:bg-zinc-800"
-        >
-          <span>➕</span>
-          <span>Invite Client</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {groups.length > 0 && (
+            <select
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+              className="rounded-2xl border-2 border-zinc-200 bg-white px-3 py-3 text-xs font-bold text-zinc-900 outline-none cursor-pointer"
+            >
+              <option value="">All Groups</option>
+              {groups.map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={() => {
+              setShowInviteModal(true)
+              handleRegenerateInvite()
+            }}
+            className="flex items-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-xs font-black uppercase tracking-wider text-white shadow-sm transition hover:bg-zinc-800"
+          >
+            <span>➕</span>
+            <span>Invite Client</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -124,7 +156,14 @@ function CoachRosterPage({ authedFetch }) {
           >
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-lg font-black text-zinc-900">{client.name}</h3>
+                <h3 className="text-lg font-black text-zinc-900 flex items-center gap-2">
+                  {client.name}
+                  {client.client_group && (
+                    <span className="px-2 py-0.5 rounded border border-zinc-200 bg-zinc-50 text-[9px] font-black uppercase tracking-wider text-zinc-500">
+                      {client.client_group.name}
+                    </span>
+                  )}
+                </h3>
                 <p className="text-xs font-semibold text-zinc-500">{client.email}</p>
               </div>
               <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider ${riskColors[client.risk_level]}`}>

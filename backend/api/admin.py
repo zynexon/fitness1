@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .models import (
-	Challenge, CoachInvite, DailyChallenge, DailyChallengeCompletion,
+	Challenge, ClientGroup, CoachInvite, DailyChallenge, DailyChallengeCompletion,
 	Task, User, UserTask, XPLog,
 	Exercise, Program, WorkoutDay, WorkoutDayExercise,
 	ProgramAssignment, WorkoutLog, WorkoutLogExercise,
@@ -88,6 +88,13 @@ class CoachInviteAdmin(admin.ModelAdmin):
 	list_display = ("code", "coach", "is_active", "use_count", "created_at")
 	list_filter = ("is_active", "created_at")
 	search_fields = ("code", "coach__email")
+
+
+@admin.register(ClientGroup)
+class ClientGroupAdmin(admin.ModelAdmin):
+	list_display = ("name", "coach", "created_at")
+	list_filter = ("coach",)
+	search_fields = ("name",)
 
 
 # ── Workout System ──────────────────────────────────────────────────────────
