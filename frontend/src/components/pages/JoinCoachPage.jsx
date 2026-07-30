@@ -64,13 +64,13 @@ function JoinCoachPage({ activeWarriorsCount, handleAuthSubmit, authLoading, err
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-md lg:max-w-lg flex-col px-5 pt-8 pb-6">
       <div className="mb-8 mt-12 text-center">
-        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-zinc-500 mb-1">
+        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-zinc-400 mb-1">
           {branding.copyPack.landingPageCopy.navBrand}
         </p>
-        <h1 className="text-3xl font-black tracking-tight text-zinc-950 mb-2">
+        <h1 className="text-3xl font-black tracking-tight text-white mb-2">
           Join {coachName}'s Team
         </h1>
-        <p className="text-sm font-semibold text-zinc-600">
+        <p className="text-sm font-semibold text-zinc-400">
           Create your account to connect with your coach.
         </p>
       </div>

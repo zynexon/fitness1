@@ -1004,9 +1004,10 @@ def get_user_stats(user):
 
 def get_current_week_window(reference_date=None):
     today = reference_date or timezone.localdate()
-    days_since_sunday = (today.weekday() + 1) % 7
-    week_end_date = today - timedelta(days=days_since_sunday)
-    week_start_date = week_end_date - timedelta(days=6)
+    # Monday is 0, Sunday is 6
+    days_since_monday = today.weekday()
+    week_start_date = today - timedelta(days=days_since_monday)
+    week_end_date = week_start_date + timedelta(days=6)
     return week_start_date, week_end_date
 
 
@@ -1297,4 +1298,122 @@ def assign_task_to_group(coach, group, title, category, target_date):
     return {
         "assigned_count": len(assigned_ids),
         "client_ids": assigned_ids,
+    }
+
+def get_coach_dashboard_summary(coach):
+    from .models import User, Program, Exercise, UserTask, WorkoutLog, CoachInvite, JournalEntry, BodyMetricEntry
+    import random, string
+
+    clients = coach.clients.all()
+    active_clients = clients.filter(is_active=True)
+    archived_clients = clients.filter(is_active=False)
+
+    risk_breakdown = {"at_risk": 0, "slipping": 0, "on_track": 0}
+    for client in active_clients:
+        risk_level = compute_client_risk_level(client)
+        risk_breakdown[risk_level] += 1
+
+    total_groups = coach.client_groups.count()
+    ungrouped_client_count = active_clients.filter(client_group__isnull=True).count()
+
+    total_programs = Program.objects.filter(coach=coach).count()
+    total_exercises = Exercise.objects.filter(coach=coach).count()
+
+    week_start_date, week_end_date = get_current_week_window()
+
+    completed_tasks = UserTask.objects.filter(
+        user__in=active_clients,
+        completed=True,
+        date__gte=week_start_date,
+        date__lte=week_end_date
+    ).count()
+
+    completed_workouts = WorkoutLog.objects.filter(
+        user__in=active_clients,
+        completed=True,
+        date__gte=week_start_date,
+        date__lte=week_end_date
+    ).count()
+
+    weekly_engagement = completed_tasks + completed_workouts
+
+    new_clients_this_week = clients.filter(
+        created_at__date__gte=week_start_date,
+        created_at__date__lte=week_end_date
+    ).count()
+
+    invite = CoachInvite.objects.filter(coach=coach, is_active=True).first()
+    if not invite:
+        code = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+        invite = CoachInvite.objects.create(coach=coach, code=code, max_uses=1)
+
+    recent_activities = []
+    
+    recent_tasks = UserTask.objects.filter(
+        user__in=active_clients, completed=True, completed_at__isnull=False
+    ).order_by('-completed_at')[:15]
+    for t in recent_tasks:
+        recent_activities.append({
+            "id": str(t.id),
+            "type": "task",
+            "client_name": t.user.name,
+            "client_id": str(t.user.id),
+            "description": t.custom_title if t.is_custom else (t.task.title if t.task else "Daily Task"),
+            "timestamp": t.completed_at.isoformat()
+        })
+        
+    recent_workouts = WorkoutLog.objects.filter(
+        user__in=active_clients, completed=True, completed_at__isnull=False
+    ).order_by('-completed_at')[:15]
+    for w in recent_workouts:
+        recent_activities.append({
+            "id": str(w.id),
+            "type": "workout",
+            "client_name": w.user.name,
+            "client_id": str(w.user.id),
+            "description": w.workout_day.title if w.workout_day else "Workout",
+            "timestamp": w.completed_at.isoformat()
+        })
+        
+    recent_journals = JournalEntry.objects.filter(
+        user__in=active_clients
+    ).order_by('-created_at')[:15]
+    for j in recent_journals:
+        recent_activities.append({
+            "id": str(j.id),
+            "type": "journal",
+            "client_name": j.user.name,
+            "client_id": str(j.user.id),
+            "description": f"Logged a journal entry (Mood: {j.mood_score or '-'})",
+            "timestamp": j.created_at.isoformat()
+        })
+        
+    recent_metrics = BodyMetricEntry.objects.filter(
+        user__in=active_clients
+    ).order_by('-created_at')[:15]
+    for m in recent_metrics:
+        recent_activities.append({
+            "id": str(m.id),
+            "type": "body_metric",
+            "client_name": m.user.name,
+            "client_id": str(m.user.id),
+            "description": "Logged body metrics",
+            "timestamp": m.created_at.isoformat()
+        })
+        
+    recent_activities.sort(key=lambda x: x["timestamp"], reverse=True)
+    recent_activities = recent_activities[:15]
+
+    return {
+        "total_clients": active_clients.count(),
+        "risk_breakdown": risk_breakdown,
+        "total_groups": total_groups,
+        "ungrouped_client_count": ungrouped_client_count,
+        "total_programs": total_programs,
+        "total_exercises": total_exercises,
+        "weekly_engagement": weekly_engagement,
+        "new_clients_this_week": new_clients_this_week,
+        "archived_client_count": archived_clients.count(),
+        "invite_url": f"/join/{invite.code}",
+        "recent_activities": recent_activities
     }

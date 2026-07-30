@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { MetricSparkline } from './BodyMetricsPage'
+import ConfirmationModal from '../ConfirmationModal'
 
 export default function CoachBodyMetricsPanel({ clientId, authedFetch }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [alertConfig, setAlertConfig] = useState({ open: false, title: '', message: '' })
+  const showAlert = (title, message = '') => setAlertConfig({ open: true, title, message })
 
   // Library & Config
   const [definitions, setDefinitions] = useState([])
@@ -52,15 +55,15 @@ export default function CoachBodyMetricsPanel({ clientId, authedFetch }) {
     
     setCreatingMetric(true)
     try {
-      const newDef = await authedFetch('/api/coach/metric-definitions/', {
+      await authedFetch('/api/coach/metric-definitions/', {
         method: 'POST',
         body: JSON.stringify({ name: newMetricName, unit: newMetricUnit })
       })
-      setDefinitions(prev => [...prev, newDef])
       setNewMetricName('')
       setNewMetricUnit('')
+      fetchData()
     } catch (err) {
-      alert(err.message || 'Error creating metric type.')
+      showAlert('Error', err.message || 'Error creating metric type.')
     } finally {
       setCreatingMetric(false)
     }
@@ -77,7 +80,7 @@ export default function CoachBodyMetricsPanel({ clientId, authedFetch }) {
       })
       setSubscriptions(res.subscriptions)
     } catch (err) {
-      alert('Failed to update subscription.')
+      showAlert('Error', 'Failed to update subscription.')
     }
   }
 
@@ -263,6 +266,14 @@ export default function CoachBodyMetricsPanel({ clientId, authedFetch }) {
           </div>
         </div>
       )}
+      <ConfirmationModal
+        open={alertConfig.open}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText="OK"
+        cancelText={null}
+        onConfirm={() => setAlertConfig({ open: false, title: '', message: '' })}
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ConfirmationModal from '../../ConfirmationModal'
 
 function CoachGroupsPage({ authedFetch }) {
   const navigate = useNavigate()
@@ -35,8 +36,16 @@ function CoachGroupsPage({ authedFetch }) {
   const [assigningProgram, setAssigningProgram] = useState(false)
 
   const [showAssignTaskModal, setShowAssignTaskModal] = useState(false)
+  const [bulkAssigningTask, setBulkAssigningTask] = useState(false)
   const [taskTitle, setTaskTitle] = useState('')
   const [taskCategory, setTaskCategory] = useState('general')
+
+  const [alertConfig, setAlertConfig] = useState({ open: false, title: '', message: '' })
+  const showAlert = (title, message = '') => setAlertConfig({ open: true, title, message })
+  
+  const [confirmConfig, setConfirmConfig] = useState({ open: false, title: '', message: '', onConfirm: null })
+  const showConfirm = (title, message, onConfirm) => setConfirmConfig({ open: true, title, message, onConfirm })
+  
   const [taskDate, setTaskDate] = useState('')
   const [assigningTask, setAssigningTask] = useState(false)
 
@@ -57,7 +66,7 @@ function CoachGroupsPage({ authedFetch }) {
       const data = await authedFetch(`/api/coach/groups/${id}/`)
       setGroupDetail(data)
     } catch (err) {
-      alert(err.message || 'Failed to fetch group details.')
+      showAlert('Error', err.message || 'Failed to fetch group details.')
       setSelectedGroupId(null)
     } finally {
       setDetailLoading(false)
@@ -69,7 +78,7 @@ function CoachGroupsPage({ authedFetch }) {
       const data = await authedFetch('/api/coach/clients/')
       setAllClients(data)
     } catch (err) {
-      alert(err.message || 'Failed to fetch clients.')
+      showAlert('Error', err.message || 'Failed to fetch clients.')
     }
   }
 
@@ -116,20 +125,19 @@ function CoachGroupsPage({ authedFetch }) {
       fetchGroups()
       if (selectedGroupId && modalMode === 'edit') fetchGroupDetail(selectedGroupId)
     } catch (err) {
-      alert(err.message || 'Error saving group.')
+      showAlert('Error', err.message || 'Error saving group.')
     } finally {
       setSaving(false)
     }
   }
 
   const handleDeleteGroup = async (id) => {
-    if (!confirm('Are you sure you want to delete this group? Members will not be deleted.')) return
     try {
       await authedFetch(`/api/coach/groups/${id}/`, { method: 'DELETE' })
       if (selectedGroupId === id) setSelectedGroupId(null)
       fetchGroups()
     } catch (err) {
-      alert(err.message || 'Error deleting group.')
+      showAlert('Error', err.message || 'Error deleting group.')
     }
   }
 
@@ -176,14 +184,13 @@ function CoachGroupsPage({ authedFetch }) {
       fetchGroupDetail(selectedGroupId)
       fetchGroups() // update member counts in list
     } catch (err) {
-      alert(err.message || 'Error adding members.')
+      showAlert('Error', err.message || 'Error adding members.')
     } finally {
       setAddingMembers(false)
     }
   }
 
   const handleRemoveMember = async (clientId) => {
-    if (!confirm('Remove this client from the group?')) return
     try {
       await authedFetch(`/api/coach/groups/${selectedGroupId}/members/${clientId}/`, {
         method: 'DELETE'
@@ -191,7 +198,7 @@ function CoachGroupsPage({ authedFetch }) {
       fetchGroupDetail(selectedGroupId)
       fetchGroups()
     } catch (err) {
-      alert(err.message || 'Error removing member.')
+      showAlert('Error', err.message || 'Error removing member.')
     }
   }
 
@@ -206,10 +213,10 @@ function CoachGroupsPage({ authedFetch }) {
         method: 'POST',
         body: JSON.stringify({ program_id: selectedProgramId }),
       })
-      alert(`Successfully assigned program to ${res.assigned_count} clients!`)
+      showAlert('Success', `Successfully assigned program to ${res.assigned_count} clients!`)
       setShowAssignProgramModal(false)
     } catch (err) {
-      alert(err.message || 'Error assigning program.')
+      showAlert('Error', err.message || 'Error assigning program.')
     } finally {
       setAssigningProgram(false)
     }
@@ -228,11 +235,11 @@ function CoachGroupsPage({ authedFetch }) {
           date: taskDate || null
         }),
       })
-      alert(`Successfully assigned task to ${res.assigned_count} clients!`)
+      showAlert('Success', `Successfully assigned task to ${res.assigned_count} clients!`)
       setShowAssignTaskModal(false)
       setTaskTitle('')
     } catch (err) {
-      alert(err.message || 'Error assigning task.')
+      showAlert('Error', err.message || 'Error assigning task.')
     } finally {
       setAssigningTask(false)
     }
@@ -387,7 +394,7 @@ function CoachGroupsPage({ authedFetch }) {
                       <div className="text-sm font-bold text-zinc-900">{member.week_adherence_pct}%</div>
                     </div>
                     <button
-                      onClick={() => handleRemoveMember(member.id)}
+                      onClick={() => showConfirm('Remove Member', 'Are you sure you want to remove this member?', () => handleRemoveMember(member.id))}
                       className="p-2 rounded-xl text-zinc-400 hover:bg-red-50 hover:text-red-600 transition"
                       title="Remove from group"
                     >
@@ -609,7 +616,7 @@ function CoachGroupsPage({ authedFetch }) {
                 </p>
               </div>
               <button
-                onClick={() => handleDeleteGroup(group.id)}
+                onClick={() => showConfirm('Delete Group', 'Are you sure you want to delete this group?', () => handleDeleteGroup(group.id))}
                 className="opacity-0 group-hover:opacity-100 p-2 text-zinc-400 hover:text-red-500 transition"
                 title="Delete group"
               >

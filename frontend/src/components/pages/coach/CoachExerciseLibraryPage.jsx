@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ConfirmationModal from '../../ConfirmationModal'
 
 export default function CoachExerciseLibraryPage({ authedFetch }) {
   const [exercises, setExercises] = useState([])
@@ -12,6 +13,12 @@ export default function CoachExerciseLibraryPage({ authedFetch }) {
   const [description, setDescription] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const [alertConfig, setAlertConfig] = useState({ open: false, title: '', message: '' })
+  const showAlert = (title, message = '') => setAlertConfig({ open: true, title, message })
+  
+  const [confirmConfig, setConfirmConfig] = useState({ open: false, title: '', message: '', onConfirm: null })
+  const showConfirm = (title, message, onConfirm) => setConfirmConfig({ open: true, title, message, onConfirm })
 
   const fetchExercises = async () => {
     try {
@@ -68,19 +75,27 @@ export default function CoachExerciseLibraryPage({ authedFetch }) {
       closeModal()
       fetchExercises()
     } catch (err) {
-      alert(err.message || 'Error saving exercise.')
+      showAlert('Error', err.message || 'Error saving exercise.')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this exercise? It will be removed from all programs.")) return
+  const requestDeleteExercise = (id) => {
+    showConfirm(
+      'Delete Exercise',
+      'Are you sure you want to delete this exercise? It will be removed from all programs.',
+      () => handleDeleteExercise(id)
+    )
+  }
+
+  const handleDeleteExercise = async (id) => {
+    setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })
     try {
       await authedFetch(`/api/coach/exercises/${id}/`, { method: 'DELETE' })
       fetchExercises()
     } catch (err) {
-      alert(err.message || 'Error deleting exercise.')
+      showAlert('Error', err.message || 'Error deleting exercise.')
     }
   }
 
@@ -126,12 +141,12 @@ export default function CoachExerciseLibraryPage({ authedFetch }) {
                 >
                   Edit
                 </button>
-                <button
-                  onClick={() => handleDelete(ex.id)}
-                  className="rounded-lg bg-red-950/30 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
-                >
-                  Delete
-                </button>
+                  <button
+                    onClick={() => requestDeleteExercise(ex.id)}
+                    className="rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs font-bold uppercase tracking-wider text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
+                  >
+                    Delete
+                  </button>
               </div>
             </div>
           ))}
@@ -200,6 +215,25 @@ export default function CoachExerciseLibraryPage({ authedFetch }) {
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        open={alertConfig.open}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText="OK"
+        cancelText={null}
+        onConfirm={() => setAlertConfig({ open: false, title: '', message: '' })}
+      />
+
+      <ConfirmationModal
+        open={confirmConfig.open}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText="Confirm"
+        cancelText="Cancel"
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   )
 }

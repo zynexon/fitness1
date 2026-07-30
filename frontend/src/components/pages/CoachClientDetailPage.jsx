@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import CoachBodyMetricsPanel from './CoachBodyMetricsPanel'
+import ConfirmationModal from '../ConfirmationModal'
 
 import branding from '../../config/branding'
 
@@ -24,6 +25,11 @@ function CoachClientDetailPage({ authedFetch }) {
   const [coachPrograms, setCoachPrograms] = useState([])
   const [selectedProgramId, setSelectedProgramId] = useState('')
   const [assigningProgram, setAssigningProgram] = useState(false)
+  const [alertConfig, setAlertConfig] = useState({ open: false, title: '', message: '' })
+  const showAlert = (title, message = '') => setAlertConfig({ open: true, title, message })
+  const [showUnassignModal, setShowUnassignModal] = useState(false)
+  const [showArchiveModal, setShowArchiveModal] = useState(false)
+  const [showUnarchiveModal, setShowUnarchiveModal] = useState(false)
 
   const fetchClient = async () => {
     try {
@@ -55,9 +61,9 @@ function CoachClientDetailPage({ authedFetch }) {
         method: 'PATCH',
         body: JSON.stringify({ note: noteInput }),
       })
-      alert('Note saved!')
+      showAlert('Success', 'Note saved!')
     } catch (err) {
-      alert(err.message || 'Error saving note.')
+      showAlert('Error', err.message || 'Error saving note.')
     } finally {
       setSavingNote(false)
     }
@@ -76,11 +82,11 @@ function CoachClientDetailPage({ authedFetch }) {
           date: taskDate || null
         }),
       })
-      alert('Task assigned!')
+      showAlert('Success', 'Task assigned!')
       setTaskTitle('')
       fetchClient()
     } catch (err) {
-      alert(err.message || 'Error assigning task.')
+      showAlert('Error', err.message || 'Error assigning task.')
     } finally {
       setAssigningTask(false)
     }
@@ -95,22 +101,42 @@ function CoachClientDetailPage({ authedFetch }) {
         method: 'POST',
         body: JSON.stringify({ program_id: selectedProgramId }),
       })
-      alert('Program assigned!')
+      showAlert('Success', 'Program assigned!')
       fetchClient()
     } catch (err) {
-      alert(err.message || 'Error assigning program.')
+      showAlert('Error', err.message || 'Error assigning program.')
     } finally {
       setAssigningProgram(false)
     }
   }
 
   const handleUnassignProgram = async () => {
-    if (!window.confirm('Remove active program from this client?')) return
     try {
       await authedFetch(`/api/coach/clients/${id}/program/`, { method: 'DELETE' })
       fetchClient()
+      setShowUnassignModal(false)
     } catch (err) {
-      alert(err.message || 'Error removing program.')
+      showAlert('Error', err.message || 'Error removing program.')
+    }
+  }
+
+  const handleArchiveClient = async () => {
+    try {
+      await authedFetch(`/api/coach/clients/${id}/archive/`, { method: 'POST' })
+      fetchClient()
+      setShowArchiveModal(false)
+    } catch (err) {
+      showAlert('Error', err.message || 'Error archiving client.')
+    }
+  }
+
+  const handleUnarchiveClient = async () => {
+    try {
+      await authedFetch(`/api/coach/clients/${id}/unarchive/`, { method: 'POST' })
+      fetchClient()
+      setShowUnarchiveModal(false)
+    } catch (err) {
+      showAlert('Error', err.message || 'Error unarchiving client.')
     }
   }
 
@@ -144,6 +170,21 @@ function CoachClientDetailPage({ authedFetch }) {
                 title="View in Groups"
               >
                 🏷️ {client.client_group.name}
+              </button>
+            )}
+            {client.is_active ? (
+              <button
+                onClick={() => setShowArchiveModal(true)}
+                className="px-2.5 py-1 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-[10px] font-black uppercase tracking-wider text-red-500 transition cursor-pointer"
+              >
+                Archive Client
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowUnarchiveModal(true)}
+                className="px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-wider text-emerald-500 transition cursor-pointer"
+              >
+                Unarchive Client
               </button>
             )}
           </h1>
@@ -260,7 +301,7 @@ function CoachClientDetailPage({ authedFetch }) {
                     <h3 className="text-lg font-black uppercase text-zinc-900">{programData.assignment.program_name}</h3>
                     <p className="text-xs font-bold text-zinc-500">Started {new Date(programData.assignment.start_date).toLocaleDateString()}</p>
                   </div>
-                  <button onClick={handleUnassignProgram} className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-200">
+                  <button onClick={() => setShowUnassignModal(true)} className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-200">
                     Unassign
                   </button>
                 </div>
@@ -365,6 +406,45 @@ function CoachClientDetailPage({ authedFetch }) {
           </div>
         </div>
       </div>
+
+      <ConfirmationModal
+        open={showArchiveModal}
+        title="Archive Client"
+        message="Are you sure you want to archive this client? They will no longer appear in your active roster."
+        confirmText="Archive"
+        cancelText="Cancel"
+        onConfirm={handleArchiveClient}
+        onCancel={() => setShowArchiveModal(false)}
+      />
+
+      <ConfirmationModal
+        open={showUnarchiveModal}
+        title="Unarchive Client"
+        message="Are you sure you want to restore this client to your active roster?"
+        confirmText="Restore"
+        cancelText="Cancel"
+        onConfirm={handleUnarchiveClient}
+        onCancel={() => setShowUnarchiveModal(false)}
+      />
+
+      <ConfirmationModal
+        open={showUnassignModal}
+        title="Unassign Program"
+        message="Are you sure you want to remove the active program from this client?"
+        confirmText="Remove"
+        cancelText="Cancel"
+        onConfirm={handleUnassignProgram}
+        onCancel={() => setShowUnassignModal(false)}
+      />
+
+      <ConfirmationModal
+        open={alertConfig.open}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText="OK"
+        cancelText={null}
+        onConfirm={() => setAlertConfig({ open: false, title: '', message: '' })}
+      />
     </div>
   )
 }

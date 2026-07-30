@@ -16,10 +16,13 @@ function CoachRosterPage({ authedFetch }) {
 
   const [groups, setGroups] = useState([])
   const [selectedGroupId, setSelectedGroupId] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
 
   const fetchRoster = async () => {
     try {
-      const url = selectedGroupId ? `/api/coach/clients/?group=${selectedGroupId}` : '/api/coach/clients/'
+      const url = selectedGroupId 
+        ? `/api/coach/clients/?group=${selectedGroupId}&archived=${showArchived}` 
+        : `/api/coach/clients/?archived=${showArchived}`
       const data = await authedFetch(url)
       setClients(data)
     } catch (err) {
@@ -44,7 +47,7 @@ function CoachRosterPage({ authedFetch }) {
 
   useEffect(() => {
     fetchRoster()
-  }, [selectedGroupId])
+  }, [selectedGroupId, showArchived])
 
 
   const fetchInvite = async () => {
@@ -134,6 +137,16 @@ function CoachRosterPage({ authedFetch }) {
               ))}
             </select>
           )}
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={`rounded-2xl border-2 px-3 py-2 text-xs font-bold transition ${
+              showArchived
+                ? 'border-zinc-900 bg-zinc-900 text-white'
+                : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900'
+            }`}
+          >
+            {showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
           <button
             onClick={() => {
               setShowInviteModal(true)

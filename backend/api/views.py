@@ -1508,6 +1508,14 @@ class IsCoach(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.is_coach)
 
+class CoachDashboardView(APIView):
+    permission_classes = [IsCoach]
+
+    def get(self, request):
+        from .services import get_coach_dashboard_summary
+        summary = get_coach_dashboard_summary(request.user)
+        return Response(summary)
+
 class CoachInviteView(APIView):
     permission_classes = [IsCoach]
 
@@ -1561,6 +1569,9 @@ class CoachClientListView(APIView):
     def get(self, request):
         from .services import get_week_adherence, compute_client_risk_level, get_current_week_window
         clients = request.user.clients.select_related('client_group').all()
+
+        is_archived = request.query_params.get("archived") == "true"
+        clients = clients.filter(is_active=not is_archived)
 
         # Optional group filter
         group_id = request.query_params.get("group")
@@ -1649,6 +1660,33 @@ class CoachClientNoteView(APIView):
         
         client.coach_note = serializer.validated_data["note"]
         client.save(update_fields=["coach_note"])
+        
+        return Response({"success": True})
+
+class CoachClientArchiveView(APIView):
+    permission_classes = [IsCoach]
+
+    def post(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        from django.utils import timezone
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+        
+        client.is_active = False
+        client.archived_at = timezone.now()
+        client.save(update_fields=["is_active", "archived_at"])
+        
+        return Response({"success": True})
+
+class CoachClientUnarchiveView(APIView):
+    permission_classes = [IsCoach]
+
+    def post(self, request, client_id):
+        from django.shortcuts import get_object_or_404
+        client = get_object_or_404(request.user.clients.all(), id=client_id)
+        
+        client.is_active = True
+        client.archived_at = None
+        client.save(update_fields=["is_active", "archived_at"])
         
         return Response({"success": True})
 

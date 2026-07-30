@@ -1029,3 +1029,94 @@ class ClientGroupTests(TestCase):
         res = api.get(reverse("coach-clients") + f"?group={group_id}")
         self.assertEqual(len(res.data), 1)
         self.assertEqual(res.data[0]["id"], str(self.clients[0].id))
+
+class CoachArchivingTests(TestCase):
+    def setUp(self):
+        self.coach_email = 'coach@example.com'
+        self.coach = get_user_model().objects.create_user(
+            username=self.coach_email,
+            email=self.coach_email,
+            password='Password123!',
+            name='The Coach',
+            is_coach=True,
+        )
+        self.client_user = get_user_model().objects.create_user(
+            username='client@example.com',
+            email='client@example.com',
+            password='Password123!',
+            name='The Client',
+            coach=self.coach
+        )
+
+    def _auth_coach(self):
+        from rest_framework.test import APIClient
+        api = APIClient()
+        api.force_authenticate(user=self.coach)
+        return api
+
+    def test_archive_client(self):
+        api = self._auth_coach()
+        res = api.post(reverse("coach-client-archive", kwargs={"client_id": self.client_user.id}))
+        self.assertEqual(res.status_code, 200)
+        self.client_user.refresh_from_db()
+        self.assertFalse(self.client_user.is_active)
+        self.assertIsNotNone(self.client_user.archived_at)
+        
+    def test_unarchive_client(self):
+        self.client_user.is_active = False
+        self.client_user.archived_at = timezone.now()
+        self.client_user.save()
+        
+        api = self._auth_coach()
+        res = api.post(reverse("coach-client-unarchive", kwargs={"client_id": self.client_user.id}))
+        self.assertEqual(res.status_code, 200)
+        self.client_user.refresh_from_db()
+        self.assertTrue(self.client_user.is_active)
+        self.assertIsNone(self.client_user.archived_at)
+
+    def test_archived_client_not_in_active_roster(self):
+        self.client_user.is_active = False
+        self.client_user.archived_at = timezone.now()
+        self.client_user.save()
+        
+        api = self._auth_coach()
+        res = api.get(reverse("coach-clients"))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data), 0)
+        
+        res = api.get(reverse("coach-clients") + "?archived=true")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data), 1)
+
+class CoachDashboardTests(TestCase):
+    def setUp(self):
+        self.coach_email = 'coach@example.com'
+        self.coach = get_user_model().objects.create_user(
+            username=self.coach_email,
+            email=self.coach_email,
+            password='Password123!',
+            name='The Coach',
+            is_coach=True,
+        )
+        self.client_user = get_user_model().objects.create_user(
+            username='client@example.com',
+            email='client@example.com',
+            password='Password123!',
+            name='The Client',
+            coach=self.coach
+        )
+        
+    def _auth_coach(self):
+        from rest_framework.test import APIClient
+        api = APIClient()
+        api.force_authenticate(user=self.coach)
+        return api
+        
+    def test_coach_dashboard_summary(self):
+        api = self._auth_coach()
+        res = api.get(reverse("coach-dashboard"))
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("total_clients", res.data)
+        self.assertEqual(res.data["total_clients"], 1)
+        self.assertIn("risk_breakdown", res.data)
+        self.assertIn("recent_activities", res.data)

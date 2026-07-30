@@ -279,6 +279,7 @@ class ClientRosterSerializer(serializers.ModelSerializer):
             "risk_level",
             "streak_shields",
             "client_group",
+            "is_active",
         ]
 
     def get_days_since_active(self, obj):

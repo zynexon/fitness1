@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import ConfirmationModal from '../../ConfirmationModal'
 
 export default function CoachProgramsPage({ authedFetch }) {
   const [programs, setPrograms] = useState([])
@@ -10,6 +11,12 @@ export default function CoachProgramsPage({ authedFetch }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const [alertConfig, setAlertConfig] = useState({ open: false, title: '', message: '' })
+  const showAlert = (title, message = '') => setAlertConfig({ open: true, title, message })
+  
+  const [confirmConfig, setConfirmConfig] = useState({ open: false, title: '', message: '', onConfirm: null })
+  const showConfirm = (title, message, onConfirm) => setConfirmConfig({ open: true, title, message, onConfirm })
 
   const fetchPrograms = async () => {
     try {
@@ -46,22 +53,32 @@ export default function CoachProgramsPage({ authedFetch }) {
         method: 'POST',
         body: JSON.stringify({ name, description })
       })
+      setName('')
+      setDescription('')
       closeModal()
       fetchPrograms()
     } catch (err) {
-      alert(err.message || 'Error creating program.')
+      showAlert('Error', err.message || 'Error creating program.')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this program? It will be removed from all assigned clients.")) return
+  const requestDeleteProgram = (id) => {
+    showConfirm(
+      'Delete Program',
+      'Are you sure you want to delete this program? It will be removed from all assigned clients.',
+      () => handleDeleteProgram(id)
+    )
+  }
+
+  const handleDeleteProgram = async (id) => {
+    setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })
     try {
       await authedFetch(`/api/coach/programs/${id}/`, { method: 'DELETE' })
       fetchPrograms()
     } catch (err) {
-      alert(err.message || 'Error deleting program.')
+      showAlert('Error', err.message || 'Error deleting program.')
     }
   }
 
@@ -109,7 +126,7 @@ export default function CoachProgramsPage({ authedFetch }) {
                   Builder
                 </Link>
                 <button
-                  onClick={() => handleDelete(prog.id)}
+                  onClick={() => requestDeleteProgram(prog.id)}
                   className="rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs font-bold uppercase tracking-wider text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
                 >
                   Delete
@@ -169,6 +186,25 @@ export default function CoachProgramsPage({ authedFetch }) {
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        open={alertConfig.open}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText="OK"
+        cancelText={null}
+        onConfirm={() => setAlertConfig({ open: false, title: '', message: '' })}
+      />
+
+      <ConfirmationModal
+        open={confirmConfig.open}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText="Confirm"
+        cancelText="Cancel"
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   )
 }

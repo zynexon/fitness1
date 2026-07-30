@@ -36,6 +36,7 @@ class User(AbstractUser):
 	coach = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
 	coach_note = models.TextField(blank=True, default="")
 	client_group = models.ForeignKey('ClientGroup', on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
+	archived_at = models.DateTimeField(null=True, blank=True)
 
 
 class CoachInvite(models.Model):

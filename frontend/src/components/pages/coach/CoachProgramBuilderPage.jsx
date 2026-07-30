@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import ConfirmationModal from '../../ConfirmationModal'
 
 const WEEKDAYS = [
   { val: 0, label: 'Monday' },
@@ -22,6 +23,12 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
   const [dayModal, setDayModal] = useState({ open: false, isEdit: false, dayData: null, weekday: 0, title: '' })
   const [exerciseModal, setExerciseModal] = useState({ open: false, isEdit: false, dayId: null, wdeData: null, exerciseId: '', sets: '', reps: '', notes: '' })
   const [saving, setSaving] = useState(false)
+
+  const [alertConfig, setAlertConfig] = useState({ open: false, title: '', message: '' })
+  const showAlert = (title, message = '') => setAlertConfig({ open: true, title, message })
+  
+  const [confirmConfig, setConfirmConfig] = useState({ open: false, title: '', message: '', onConfirm: null })
+  const showConfirm = (title, message, onConfirm) => setConfirmConfig({ open: true, title, message, onConfirm })
 
   const fetchData = async () => {
     try {
@@ -69,21 +76,25 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
         })
       }
       setDayModal({ open: false })
-      fetchData()
+      fetchProgram()
     } catch (err) {
-      alert(err.message || 'Error saving day.')
+      showAlert('Error', err.message || 'Error saving day.')
     } finally {
       setSaving(false)
     }
   }
 
+  const requestDeleteDay = (dayId) => {
+    showConfirm('Delete Day', 'Delete this workout day and all its prescribed exercises?', () => handleDeleteDay(dayId))
+  }
+
   const handleDeleteDay = async (dayId) => {
-    if (!window.confirm('Delete this workout day and all its prescribed exercises?')) return
+    setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })
     try {
       await authedFetch(`/api/coach/programs/${id}/days/${dayId}/`, { method: 'DELETE' })
-      fetchData()
+      fetchProgram()
     } catch (err) {
-      alert(err.message || 'Error deleting day.')
+      showAlert('Error', err.message || 'Error deleting day.')
     }
   }
 
@@ -103,7 +114,8 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
 
   const handleSaveExercise = async (e) => {
     e.preventDefault()
-    if (!exerciseModal.isEdit && !exerciseModal.exerciseId) return alert('Select an exercise')
+    if (!exerciseModal.isEdit && !exerciseModal.exerciseId) return showAlert('Error', 'Select an exercise')
+    
     setSaving(true)
     
     const payload = {
@@ -126,21 +138,25 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
         })
       }
       setExerciseModal({ open: false })
-      fetchData()
+      fetchProgram()
     } catch (err) {
-      alert(err.message || 'Error saving exercise.')
+      showAlert('Error', err.message || 'Error saving exercise.')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDeleteExercise = async (dayId, wdeId) => {
-    if (!window.confirm('Remove this exercise from the day?')) return
+  const requestRemoveExercise = (dayId, prescribedExId) => {
+    showConfirm('Remove Exercise', 'Remove this exercise from the day?', () => handleRemoveExercise(dayId, prescribedExId))
+  }
+
+  const handleRemoveExercise = async (dayId, prescribedExId) => {
+    setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })
     try {
-      await authedFetch(`/api/coach/programs/${id}/days/${dayId}/exercises/${wdeId}/`, { method: 'DELETE' })
-      fetchData()
+      await authedFetch(`/api/coach/programs/${id}/days/${dayId}/exercises/${prescribedExId}/`, { method: 'DELETE' })
+      fetchProgram()
     } catch (err) {
-      alert(err.message || 'Error removing exercise.')
+      showAlert('Error', err.message || 'Error removing exercise.')
     }
   }
 
@@ -201,7 +217,7 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDeleteDay(day.id)}
+                    onClick={() => requestDeleteDay(day.id)}
                     className="rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-red-400 transition hover:bg-red-900/50 hover:text-red-300"
                   >
                     Clear
@@ -235,7 +251,7 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
                         </div>
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
                           <button onClick={() => openExerciseModal(day.id, wde)} className="p-1.5 text-zinc-400 hover:text-white">✏️</button>
-                          <button onClick={() => handleDeleteExercise(day.id, wde.id)} className="p-1.5 text-red-500/70 hover:text-red-400">🗑️</button>
+                          <button onClick={() => requestRemoveExercise(day.id, wde.id)} className="p-1.5 text-red-500/70 hover:text-red-400">🗑️</button>
                         </div>
                       </div>
                     ))}
@@ -361,6 +377,25 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
           </div>
         </div>
       )}
+      
+      <ConfirmationModal
+        open={alertConfig.open}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText="OK"
+        cancelText={null}
+        onConfirm={() => setAlertConfig({ open: false, title: '', message: '' })}
+      />
+
+      <ConfirmationModal
+        open={confirmConfig.open}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText="Confirm"
+        cancelText="Cancel"
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   )
 }

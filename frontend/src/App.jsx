@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import JoinCoachPage from './components/pages/JoinCoachPage'
 import CoachShell from './components/layout/CoachShell'
 import CoachRosterPage from './components/pages/CoachRosterPage'
@@ -9,6 +9,7 @@ import CoachExerciseLibraryPage from './components/pages/coach/CoachExerciseLibr
 import CoachProgramsPage from './components/pages/coach/CoachProgramsPage'
 import CoachProgramBuilderPage from './components/pages/coach/CoachProgramBuilderPage'
 import CoachLeaderboardPage from './components/pages/coach/CoachLeaderboardPage'
+import CoachDashboardPage from './components/pages/coach/CoachDashboardPage'
 import confetti from 'canvas-confetti'
 import ConfirmationModal from './components/ConfirmationModal'
 import AddTaskModal from './components/AddTaskModal'
@@ -637,6 +638,15 @@ function App() {
       localStorage.setItem(bestStreakStorageKey, String(nextBest))
     }
   }, [bestStreakStorageKey, streakDays])
+
+  useEffect(() => {
+    if (!loading && user?.is_coach) {
+      const path = location.pathname.toLowerCase()
+      if (!path.startsWith('/coach') && !path.startsWith('/join/')) {
+        reactRouterNavigate('/coach/dashboard', { replace: true })
+      }
+    }
+  }, [loading, user, location.pathname, reactRouterNavigate])
 
   useEffect(() => {
     if (!user?.id || !shieldUsedToday) {
@@ -2939,6 +2949,12 @@ function App() {
     )
   }
 
+  if (user?.is_coach) {
+    if (!location.pathname.startsWith('/coach') && !location.pathname.startsWith('/join/')) {
+      return <Navigate to="/coach/dashboard" replace />
+    }
+  }
+
   if (location.pathname.startsWith('/coach')) {
     if (!user || !user.is_coach) {
       return (
@@ -2961,7 +2977,8 @@ function App() {
           location.pathname.includes('/clients') ? 'clients' : 'dashboard'
         }
         onNavigate={(key) => {
-          if (key === 'dashboard' || key === 'clients') reactRouterNavigate('/coach/clients')
+          if (key === 'dashboard') reactRouterNavigate('/coach/dashboard')
+          else if (key === 'clients') reactRouterNavigate('/coach/clients')
           else if (key === 'groups') reactRouterNavigate('/coach/groups')
           else if (key === 'exercises') reactRouterNavigate('/coach/exercises')
           else if (key === 'programs') reactRouterNavigate('/coach/programs')
@@ -2969,6 +2986,8 @@ function App() {
         }}
       >
         <Routes>
+          <Route path="/coach/dashboard" element={<CoachDashboardPage authedFetch={authedFetch} navigate={reactRouterNavigate} coachName={user.name} />} />
+          <Route path="/coach" element={<Navigate to="/coach/dashboard" replace />} />
           <Route path="/coach/exercises" element={<CoachExerciseLibraryPage authedFetch={authedFetch} />} />
           <Route path="/coach/programs/:id" element={<CoachProgramBuilderPage authedFetch={authedFetch} />} />
           <Route path="/coach/programs" element={<CoachProgramsPage authedFetch={authedFetch} />} />
@@ -2977,7 +2996,7 @@ function App() {
           <Route path="/coach/groups" element={<CoachGroupsPage authedFetch={authedFetch} />} />
           <Route path="/coach/clients/:id" element={<CoachClientDetailPage authedFetch={authedFetch} />} />
           <Route path="/coach/clients" element={<CoachRosterPage authedFetch={authedFetch} />} />
-          <Route path="*" element={<CoachRosterPage authedFetch={authedFetch} />} />
+          <Route path="*" element={<Navigate to="/coach/dashboard" replace />} />
         </Routes>
       </CoachShell>
     )
@@ -4101,10 +4120,12 @@ function App() {
 
       <ConfirmationModal
         open={Boolean(selectedTask)}
-        taskName={selectedTask?.name || ''}
-        onYes={handleConfirmYes}
-        onNo={handleConfirmNo}
-        onClose={() => setSelectedTask(null)}
+        title="Did you actually complete this?"
+        message={`Task: ${selectedTask?.name || ''}`}
+        confirmText="YES"
+        cancelText="NO"
+        onConfirm={handleConfirmYes}
+        onCancel={handleConfirmNo}
       />
 
       {showDisciplineBeast ? (
