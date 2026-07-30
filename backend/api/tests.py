@@ -268,15 +268,14 @@ class CoachClientTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertFalse(User.objects.filter(email='client3@example.com').exists())
 
-    def test_coach_excluded_from_leaderboard(self):
+    def test_coach_excluded_from_active_count(self):
         # Give coach some XP
         self.coach.xp = 1000
         self.coach.save()
         
-        from .services import get_leaderboard
-        _, _, total_users = get_leaderboard(period="all_time")
-        # Coach should not be in leaderboard
-        self.assertEqual(total_users, 0)
+        from .services import get_active_user_count
+        # Coach should not be in active count
+        self.assertEqual(get_active_user_count(), 0)
         
         # Give client XP
         client = get_user_model().objects.create_user(
@@ -286,9 +285,7 @@ class CoachClientTests(TestCase):
             name='C',
             xp=500
         )
-        entries, _, total_users = get_leaderboard(period="all_time")
-        self.assertEqual(total_users, 1)
-        self.assertEqual(entries[0]['email'], 'c@test.com')
+        self.assertEqual(get_active_user_count(), 1)
 
     def test_coach_endpoints_return_403_for_non_coach(self):
         from rest_framework.test import APIClient
@@ -701,8 +698,8 @@ class BodyMetricsTests(TestCase):
         entry = BodyMetricEntry.objects.create(user=self.client_user, date=timezone.localdate())
         BodyMetricValue.objects.create(entry=entry, metric_definition=weight, value=85.0)
 
-        client_api = self._auth_client(self.client_email, self.client_password)
-        res = client_api.get(reverse("leaderboard"))
+        coach_api = self._auth_client(self.coach_email, self.coach_password)
+        res = coach_api.get(reverse("coach-leaderboard"))
         self.assertEqual(res.status_code, 200)
         
         entries = res.data["entries"]

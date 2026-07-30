@@ -108,7 +108,7 @@
       "navBrand": "ZYNEXON",
       "heroEyebrow": "The War Within",
       "heroHeadlineLines": ["STOP", "LOSING", "YOUR", "DAYS."],
-      "heroSubHeadline": "{appName} is a daily discipline system — tasks, brain training, deep work timers, and a leaderboard — built for people who are tired of knowing what to do and still not doing it.",
+      "heroSubHeadline": "{appName} is a daily discipline system — tasks, brain training, and deep work timers — built for people who are tired of knowing what to do and still not doing it.",
       "activeWarriorsLabel": "{streakUnitLabelPlural} active this week",
       "heroCTA": "⚡ Test Your Mental Speed — 30 sec",
       "heroSubCTA": "No signup needed. See your score instantly.",
@@ -141,12 +141,6 @@
           "title": "War Mode",
           "color": "border-l-red-500",
           "desc": "Lock in for 25, 45, or 60 minutes of deep work. Phone down. Timer running. XP only lands if you actually show up — it runs on the honour system."
-        },
-        {
-          "icon": "🏆",
-          "title": "Leaderboard",
-          "color": "border-l-amber-500",
-          "desc": "See exactly where you rank against every other {streakUnitLabel} this week. Weekly XP resets every Monday — the race restarts. Nobody coasts."
         },
         {
           "icon": "📖",
@@ -231,8 +225,7 @@
 
     "guestQuickMathCopy": {
       "lowScoreMsg": "This is where every {streakUnitLabel} starts. The gap closes fast.",
-      "featureWarMode": { "label": "War Mode", "desc": "25–60 min deep work sessions. XP only if you finish." },
-      "featureLeaderboard": { "label": "Live leaderboard", "desc": "Weekly rank among all active {streakUnitLabelPlural}. Resets every Monday." }
+      "featureWarMode": { "label": "War Mode", "desc": "25–60 min deep work sessions. XP only if you finish." }
     },
 
     "homeCopy": {
@@ -256,7 +249,7 @@
       "timerNoShowBtn": "I didn't show up",
       "warModeCompleteTitle": "War Mode Complete",
       "setNameTitle": "Set Your Name",
-      "setNameDesc": "Add your name to continue and appear on the leaderboard."
+      "setNameDesc": "Add your name to continue."
     },
 
     "leaderboardCopy": {

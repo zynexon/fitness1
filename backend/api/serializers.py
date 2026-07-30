@@ -80,9 +80,9 @@ class DailyTasksQuerySerializer(serializers.Serializer):
     date = serializers.DateField(required=False)
 
 
-class LeaderboardQuerySerializer(serializers.Serializer):
-    limit = serializers.IntegerField(required=False, min_value=1, max_value=100, default=20)
-    period = serializers.ChoiceField(choices=["weekly", "all_time"], required=False, default="weekly")
+class CoachLeaderboardQuerySerializer(serializers.Serializer):
+    scope = serializers.ChoiceField(choices=["all_time", "group"], required=False, default="all_time")
+    group_id = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class BootstrapUserInputSerializer(serializers.Serializer):
@@ -316,7 +316,7 @@ class CreateClientTaskInputSerializer(serializers.Serializer):
         required=False,
         default="general",
     )
-    date = serializers.DateField(required=False)
+    date = serializers.DateField(required=False, allow_null=True)
 
 
 class ClientTaskHistoryQuerySerializer(serializers.Serializer):

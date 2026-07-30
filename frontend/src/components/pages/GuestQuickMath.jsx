@@ -31,7 +31,6 @@ function GuestScoreScreen({ score, onSignup, onPlayAgain }) {
     { icon: '🧠', label: '9 more brain games',     desc: 'Pattern sequences, logic grids, memory recall, reaction tap…' },
     { icon: '📋', label: 'Daily task system',       desc: '5 discipline tasks every day tailored to your focus area.' },
     { icon: '⚔️', label: branding.copyPack.guestQuickMathCopy.featureWarMode.label,                desc: branding.copyPack.guestQuickMathCopy.featureWarMode.desc },
-    { icon: '🏆', label: branding.copyPack.guestQuickMathCopy.featureLeaderboard.label,        desc: interpolate(branding.copyPack.guestQuickMathCopy.featureLeaderboard.desc, { streakUnitLabelPlural: branding.copyPack.streakUnitLabelPlural }) },
     { icon: '🔥', label: 'Streak & rank system',    desc: '30 ranks to climb. Break your streak and start over.' },
   ]
 

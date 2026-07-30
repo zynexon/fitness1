@@ -67,21 +67,18 @@ function TaskCard({ task, onComplete, onDelete, isJustCompleted }) {
               }`}>
                 +{task.xp} XP
               </span>
+              {/* Coach Badge */}
+              {task.is_custom && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-700">
+                  Coach
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         {/* Right: actions */}
         <div className="flex items-center gap-2">
-          {task.is_custom && !task.completed && (
-            <button
-              type="button"
-              onClick={() => onDelete && onDelete(task)}
-              className="shrink-0 rounded-xl border border-red-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-red-600 transition-all hover:border-red-300 hover:bg-red-50 active:scale-95"
-            >
-              Delete
-            </button>
-          )}
           <button
             type="button"
             onClick={() => onComplete(task)}

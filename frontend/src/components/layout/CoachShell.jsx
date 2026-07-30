@@ -22,10 +22,9 @@ const COACH_NAV_ITEMS = [
   { key: 'dashboard',  icon: '📊', label: 'Dashboard' },
   { key: 'clients',    icon: '👥', label: 'Clients' },
   { key: 'groups',     icon: '🏷️', label: 'Groups' },
+  { key: 'leaderboard',icon: '🏆', label: 'Leaderboard' },
   { key: 'exercises',  icon: '💪', label: 'Exercises' },
   { key: 'programs',   icon: '📋', label: 'Programs' },
-  { key: 'analytics',  icon: '📈', label: 'Analytics' },
-  { key: 'settings',   icon: '⚙️', label: 'Settings' },
 ]
 
 function CoachShell({

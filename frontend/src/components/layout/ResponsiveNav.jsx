@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { key: 'Home',        icon: '🏠', label: 'Home' },
   { key: 'Workout',     icon: '🏋️', label: 'Workout' },
   { key: 'Journal',     icon: '📖', label: 'Journal' },
-  { key: 'Leaderboard', icon: '🏆', label: 'Leaderboard' },
   { key: 'Profile',     icon: '👤', label: 'Profile' },
 ]
 

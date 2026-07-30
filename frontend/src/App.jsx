@@ -8,6 +8,7 @@ import CoachClientDetailPage from './components/pages/CoachClientDetailPage'
 import CoachExerciseLibraryPage from './components/pages/coach/CoachExerciseLibraryPage'
 import CoachProgramsPage from './components/pages/coach/CoachProgramsPage'
 import CoachProgramBuilderPage from './components/pages/coach/CoachProgramBuilderPage'
+import CoachLeaderboardPage from './components/pages/coach/CoachLeaderboardPage'
 import confetti from 'canvas-confetti'
 import ConfirmationModal from './components/ConfirmationModal'
 import AddTaskModal from './components/AddTaskModal'
@@ -65,7 +66,6 @@ const FOCUS_OPTIONS = [
   { key: 'logic', icon: '⚡', label: 'Logic', desc: 'Problem solving, strategy, reasoning' },
 ]
 const LEVEL_TITLES = branding.copyPack.levelTitles
-const LEADERBOARD_CHASE_WARNING_XP = 100
 // Keep this in sync with backend/api/services.py MAX_STREAK_SHIELDS.
 const MAX_STREAK_SHIELDS = 3
 const WAR_MODE_OPTIONS = {
@@ -254,506 +254,6 @@ function ArtifactIcon({ iconKey, size = 16, color = '#a78bfa' }) {
   )
 }
 
-const PRESTIGE_ARTIFACT_NAMES = branding.copyPack.prestigeArtifactNames
-const PRESTIGE_COLORS = {
-  1: { from: '#f97316', to: '#7c2d12', glow: '#f9731666', ring: '#f97316', label: branding.copyPack.prestigeColorLabels['1'] },
-  2: { from: '#ef4444', to: '#450a0a', glow: '#ef444455', ring: '#ef4444', label: branding.copyPack.prestigeColorLabels['2'] },
-  3: { from: '#a855f7', to: '#3b0764', glow: '#a855f766', ring: '#a855f7', label: branding.copyPack.prestigeColorLabels['3'] },
-  4: { from: '#06b6d4', to: '#083344', glow: '#06b6d455', ring: '#06b6d4', label: branding.copyPack.prestigeColorLabels['4'] },
-  5: { from: '#e879f9', to: '#4a044e', glow: '#e879f977', ring: '#e879f9', label: branding.copyPack.prestigeColorLabels['5'] },
-}
-
-function PrestigeIcon({ level, size = 32 }) {
-  const c = PRESTIGE_COLORS[level] || PRESTIGE_COLORS[1]
-  const s = size
-  if (level === 1) return (
-    <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
-      <path d="M16 3C13 9 9 13 9 19C9 23.4 12.1 27 16 27C19.9 27 23 23.4 23 19C23 13 19 9 16 3Z" fill={c.from} opacity=".9"/>
-      <ellipse cx="16" cy="21" rx="4" ry="3" fill={c.to} opacity=".7"/>
-    </svg>
-  )
-  if (level === 2) return (
-    <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
-      <path d="M16 5L18 12L25 9L20 15L26 18L19 18L22 25L16 21L10 25L13 18L6 18L12 15L7 9L14 12L16 5Z" fill={c.from} opacity=".9"/>
-      <circle cx="16" cy="16" r="3.5" fill={c.to} opacity=".6"/>
-    </svg>
-  )
-  if (level === 3) return (
-    <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
-      <path d="M6 23L6 17L10 9L16 17L22 9L26 17L26 23Z" fill={c.from} opacity=".85"/>
-      <rect x="4" y="22" width="24" height="5" rx="2.5" fill={c.from}/>
-      <circle cx="6" cy="17" r="2.5" fill={c.to}/>
-      <circle cx="16" cy="13" r="3" fill={c.to}/>
-      <circle cx="26" cy="17" r="2.5" fill={c.to}/>
-    </svg>
-  )
-  if (level === 4) return (
-    <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
-      {[0, 1, 2, 3].map((r) => [0, 1, 2, 3].map((c2) => (
-        <rect key={`${r}-${c2}`} x={5 + c2 * 6} y={5 + r * 6} width="5" height="5" rx="1"
-          fill={c.from} opacity={(r + c2) % 3 === 0 ? 0.9 : (r + c2) % 3 === 1 ? 0.45 : 0.15}/>
-      )))}
-      <rect x="10" y="10" width="12" height="12" rx="2" fill="none" stroke={c.from} strokeWidth="1.2" opacity=".6"/>
-    </svg>
-  )
-  return (
-    <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
-      <polygon points="16,2 26,12 16,30 6,12" fill={c.from} opacity=".85"/>
-      <polygon points="16,2 26,12 16,14" fill="#e0f2fe" opacity=".35"/>
-      <polygon points="6,12 16,14 16,30" fill={c.from} opacity=".45"/>
-      <line x1="16" y1="2" x2="16" y2="30" stroke="#fff" strokeWidth=".4" opacity=".25"/>
-      <line x1="6" y1="12" x2="26" y2="12" stroke="#fff" strokeWidth=".4" opacity=".25"/>
-    </svg>
-  )
-}
-
-function PrestigeParticles() {
-  const canvasRef = useRef(null)
-  const rafRef = useRef(null)
-  const particlesRef = useRef([])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    const W = canvas.offsetWidth || 400
-    const H = canvas.offsetHeight || 800
-    canvas.width = W
-    canvas.height = H
-
-    const COLORS = ['#f97316', '#ef4444', '#a855f7', '#06b6d4', '#e879f9', '#fbbf24']
-    particlesRef.current = Array.from({ length: 60 }, () => ({
-      x: Math.random() * W,
-      y: Math.random() * H,
-      r: Math.random() * 1.8 + 0.4,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: -(Math.random() * 0.5 + 0.1),
-      alpha: Math.random() * 0.5 + 0.1,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      pulse: Math.random() * Math.PI * 2,
-    }))
-
-    function draw() {
-      ctx.clearRect(0, 0, W, H)
-      particlesRef.current.forEach((p) => {
-        p.x += p.vx
-        p.y += p.vy
-        p.pulse += 0.02
-        if (p.y < -4) p.y = H + 4
-        if (p.x < -4) p.x = W + 4
-        if (p.x > W + 4) p.x = -4
-        const a = p.alpha * (0.6 + 0.4 * Math.sin(p.pulse))
-        ctx.beginPath()
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
-        ctx.fillStyle = p.color + Math.round(a * 255).toString(16).padStart(2, '0')
-        ctx.fill()
-      })
-      rafRef.current = requestAnimationFrame(draw)
-    }
-    draw()
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    }
-  }, [])
-
-  return (
-    <canvas ref={canvasRef} style={{
-      position: 'absolute',
-      inset: 0,
-      width: '100%',
-      height: '100%',
-      pointerEvents: 'none',
-      opacity: 0.55,
-    }} />
-  )
-}
-
-function PrestigeCard({ entry, rank, isCurrentUser, onClick }) {
-  const [hovered, setHovered] = useState(false)
-  const pc = PRESTIGE_COLORS[entry.prestige_level] || PRESTIGE_COLORS[1]
-  const isTop3 = rank <= 3
-
-  return (
-    <div
-      onClick={() => onClick(entry)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        position: 'relative',
-        cursor: 'pointer',
-        borderRadius: isTop3 ? 18 : 14,
-        marginBottom: isTop3 ? 14 : 8,
-        transform: hovered ? 'translateX(3px)' : 'translateX(0)',
-        transition: 'transform 0.22s cubic-bezier(0.23,1,0.32,1)',
-        overflow: 'hidden',
-      }}
-    >
-      {isTop3 && (
-        <div style={{
-          position: 'absolute',
-          inset: -2,
-          borderRadius: 20,
-          background: `${pc.glow}`,
-          filter: 'blur(10px)',
-          zIndex: 0,
-          opacity: hovered ? 1 : 0.6,
-          transition: 'opacity 0.3s',
-        }} />
-      )}
-
-      <div style={{
-        position: 'relative',
-        zIndex: 1,
-        background: isTop3
-          ? 'linear-gradient(135deg, #0f0f10 0%, #18101a 50%, #0c0e18 100%)'
-          : '#0f0f10',
-        border: `1px solid ${isTop3 ? pc.ring + '55' : (isCurrentUser ? pc.ring + '44' : '#1e1e22')}`,
-        borderRadius: isTop3 ? 18 : 14,
-        padding: isTop3 ? '18px 18px' : '13px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-      }}>
-        {isTop3 && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            borderRadius: 18,
-            background: `linear-gradient(105deg, ${pc.from}0a 0%, transparent 40%, ${pc.from}08 70%, transparent 100%)`,
-            pointerEvents: 'none',
-          }} />
-        )}
-
-        <div style={{
-          flexShrink: 0,
-          width: isTop3 ? 44 : 32,
-          height: isTop3 ? 44 : 32,
-          borderRadius: '50%',
-          background: isTop3
-            ? `linear-gradient(135deg, ${pc.from}, ${pc.to})`
-            : '#1a1a1e',
-          border: `1px solid ${isTop3 ? pc.ring + '88' : '#2a2a2e'}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: isTop3 ? `0 0 12px ${pc.glow}` : 'none',
-        }}>
-          {isTop3 ? (
-            <span style={{
-              fontSize: isTop3 ? 15 : 12,
-              fontWeight: 900,
-              color: '#fff',
-              fontFamily: "'Georgia', serif",
-              letterSpacing: '-0.02em',
-            }}>
-              {rank}
-            </span>
-          ) : (
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#52525b' }}>{rank}</span>
-          )}
-        </div>
-
-        <div style={{
-          flexShrink: 0,
-          width: isTop3 ? 40 : 32,
-          height: isTop3 ? 40 : 32,
-          borderRadius: '50%',
-          background: `radial-gradient(circle at 35% 35%, ${pc.from}44, ${pc.to}cc)`,
-          border: `1.5px solid ${pc.ring}66`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: isTop3 ? `0 0 16px ${pc.glow}, inset 0 1px 0 ${pc.from}44` : `0 0 8px ${pc.glow}`,
-        }}>
-          <PrestigeIcon level={entry.prestige_level} size={isTop3 ? 22 : 18} />
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{
-              fontSize: isTop3 ? 16 : 14,
-              fontWeight: isTop3 ? 800 : 700,
-              color: isCurrentUser ? pc.from : '#f4f4f5',
-              letterSpacing: '-0.01em',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}>
-              {entry.name || branding.copyPack.prestigeCopy.defaultName}
-            </span>
-            {isCurrentUser && (
-              <span style={{
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: pc.from,
-                background: pc.from + '1a',
-                border: `0.5px solid ${pc.ring}55`,
-                borderRadius: 5,
-                padding: '1px 6px',
-                flexShrink: 0,
-              }}>You</span>
-            )}
-            {entry.equipped_badge && getBadgeIcon(entry.equipped_badge) && (
-              <span style={{ fontSize: 12, flexShrink: 0 }}>{getBadgeIcon(entry.equipped_badge)}</span>
-            )}
-            {entry.equipped_artifact ? (
-              <span title={entry.equipped_artifact.name || 'Equipped artifact'} style={{ display: 'inline-flex' }}>
-                <ArtifactIcon
-                  iconKey={entry.equipped_artifact.icon_key}
-                  color={entry.equipped_artifact.color_primary}
-                  size={14}
-                />
-              </span>
-            ) : null}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-            <span style={{
-              fontSize: 11,
-              color: pc.ring,
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-            }}>
-              Ψ{entry.prestige_level} — {PRESTIGE_ARTIFACT_NAMES[entry.prestige_level] || branding.copyPack.prestigeCopy.defaultRankName}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, color: '#52525b' }}>
-              Lv.{entry.level} {getLevelTitle(entry.level)}
-            </span>
-            <span style={{ fontSize: 10, color: '#52525b' }}>
-              🔥 {entry.streak}d
-            </span>
-            <span style={{ fontSize: 10, color: '#52525b' }}>
-              {(entry.total_xp || entry.xp || 0).toLocaleString()} XP total
-            </span>
-          </div>
-        </div>
-
-        <div style={{ flexShrink: 0, textAlign: 'center' }}>
-          <div style={{
-            fontSize: isTop3 ? 11 : 9,
-            fontWeight: 800,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: pc.ring,
-            background: `${pc.from}15`,
-            border: `0.5px solid ${pc.ring}44`,
-            borderRadius: 8,
-            padding: isTop3 ? '4px 10px' : '3px 8px',
-            whiteSpace: 'nowrap',
-          }}>
-            {pc.label}
-          </div>
-          {entry.season_label && (
-            <p style={{ margin: '3px 0 0', fontSize: 9, color: '#3f3f46', textAlign: 'center' }}>
-              {entry.season_label}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PrestigeHero({ entry }) {
-  const pc = PRESTIGE_COLORS[entry.prestige_level] || PRESTIGE_COLORS[1]
-  const [tick, setTick] = useState(0)
-
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 50)
-    return () => clearInterval(id)
-  }, [])
-
-  const pulse = 0.5 + 0.5 * Math.sin(tick * 0.08)
-
-  return (
-    <div style={{
-      position: 'relative',
-      borderRadius: 24,
-      overflow: 'hidden',
-      marginBottom: 24,
-      padding: 2,
-      background: `linear-gradient(135deg, ${pc.from}, ${pc.to}, ${pc.from})`,
-      boxShadow: `0 0 40px ${pc.glow}, 0 0 80px ${pc.glow}`,
-    }}>
-      <div style={{
-        position: 'relative',
-        background: 'linear-gradient(145deg, #0f0a00, #0c0010, #000c14)',
-        borderRadius: 22,
-        padding: '28px 20px 24px',
-        overflow: 'hidden',
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: 300,
-          height: 300,
-          transform: 'translate(-50%,-50%)',
-          background: `radial-gradient(circle, ${pc.from}${Math.round(pulse * 18 + 5).toString(16).padStart(2, '0')} 0%, transparent 70%)`,
-          pointerEvents: 'none',
-        }} />
-
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 19px, ${pc.ring}0d 19px, ${pc.ring}0d 20px),
-                            repeating-linear-gradient(90deg, transparent, transparent 19px, ${pc.ring}0d 19px, ${pc.ring}0d 20px)`,
-          pointerEvents: 'none',
-        }} />
-
-        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-          <p style={{
-            margin: '0 0 16px',
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: '0.35em',
-            textTransform: 'uppercase',
-            color: pc.ring + 'bb',
-          }}>
-            {branding.copyPack.prestigeCopy.hallTitle}
-          </p>
-
-          <div style={{
-            width: 88,
-            height: 88,
-            margin: '0 auto 16px',
-            borderRadius: '50%',
-            background: `radial-gradient(circle at 35% 30%, ${pc.from}66, ${pc.to})`,
-            border: `2px solid ${pc.ring}88`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: `0 0 32px ${pc.glow}, 0 0 60px ${pc.from}33, inset 0 1px 0 ${pc.from}55`,
-          }}>
-            <PrestigeIcon level={entry.prestige_level} size={48} />
-          </div>
-
-          <div style={{
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: '0.3em',
-            textTransform: 'uppercase',
-            color: pc.ring,
-            marginBottom: 8,
-          }}>
-            ✦ RANK 1 — {pc.label.toUpperCase()} ✦
-          </div>
-
-          <h2 style={{
-            margin: '0 0 6px',
-            fontSize: 26,
-            fontWeight: 900,
-            letterSpacing: '-0.03em',
-            color: '#f4f4f5',
-            fontFamily: "'Georgia', serif",
-          }}>
-            {entry.name || branding.copyPack.prestigeCopy.defaultName}
-          </h2>
-
-          <p style={{
-            margin: '0 0 14px',
-            fontSize: 14,
-            color: pc.ring,
-            fontWeight: 700,
-          }}>
-            Ψ{entry.prestige_level} — {PRESTIGE_ARTIFACT_NAMES[entry.prestige_level]}
-          </p>
-
-          <div style={{
-            display: 'inline-flex',
-            gap: 20,
-            background: 'rgba(0,0,0,0.4)',
-            border: `0.5px solid ${pc.ring}33`,
-            borderRadius: 12,
-            padding: '10px 20px',
-          }}>
-            {[
-              { label: 'Prestige', val: `Ψ${entry.prestige_level}` },
-              { label: 'Level', val: entry.level },
-              { label: 'Streak', val: `${entry.streak}d` },
-              { label: 'XP', val: (entry.total_xp || entry.xp || 0).toLocaleString() },
-            ].map(({ label, val }) => (
-              <div key={label} style={{ textAlign: 'center' }}>
-                <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#f4f4f5' }}>{val}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#52525b' }}>{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PrestigeEmpty({ currentLevel }) {
-  const needed = Math.max(0, 20 - currentLevel)
-  return (
-    <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-      <div style={{
-        width: 80,
-        height: 80,
-        margin: '0 auto 20px',
-        borderRadius: '50%',
-        background: '#1c1917',
-        border: '1px solid #27272a',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-          <path d="M18 4C14 11 9 16 9 23C9 28.5 13 33 18 33C23 33 27 28.5 27 23C27 16 22 11 18 4Z" fill="#27272a"/>
-        </svg>
-      </div>
-      <p style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 800, color: '#3f3f46' }}>
-        {branding.copyPack.prestigeCopy.emptyTitle}
-      </p>
-      <p style={{ margin: 0, fontSize: 13, color: '#27272a', lineHeight: 1.7 }}>
-        {needed > 0
-          ? interpolate(branding.copyPack.prestigeCopy.notEligibleMsg, { needed })
-          : branding.copyPack.prestigeCopy.eligibleMsg}
-      </p>
-    </div>
-  )
-}
-
-function fireConfetti() {
-  confetti({
-    particleCount: 80,
-    spread: 60,
-    origin: { y: 0.6 },
-    zIndex: 11000,
-  })
-
-  setTimeout(() => {
-    confetti({
-      particleCount: 60,
-      spread: 100,
-      origin: { y: 0.4 },
-      zIndex: 11000,
-    })
-  }, 300)
-}
-
-function getWeeklyResetCountdownLabel(nowMs = Date.now()) {
-  const now = new Date(nowMs)
-  const day = now.getDay()
-  const daysUntilMonday = day === 0 ? 1 : 8 - day
-  const nextMonday = new Date(now)
-  nextMonday.setDate(now.getDate() + daysUntilMonday)
-  nextMonday.setHours(0, 0, 0, 0)
-
-  const diffMs = Math.max(0, nextMonday.getTime() - now.getTime())
-  const totalHours = Math.floor(diffMs / 3600000)
-  const days = Math.floor(totalHours / 24)
-  const hours = totalHours % 24
-
-  return interpolate(branding.copyPack.weeklyResetLabel, { days, hours })
-}
 
 function getTodayStorageKeyDate() {
   const now = new Date()
@@ -962,8 +462,7 @@ function App() {
     setPendingLevelUpLevel,
   } = useGameSession(BEST_GAME_SCORE_KEY, LAST_TRAINING_RESULT_KEY)
 
-  const [leaderboardEntries, setLeaderboardEntries] = useState([])
-  const [prestigeEntries, setPrestigeEntries] = useState([])
+  const [totalPlayers, setTotalPlayers] = useState(0)
   const [gameRemainingXpByType, setGameRemainingXpByType] = useState({})
   const [dailyChallenge, setDailyChallenge] = useState(null)
   const [showDailyChallenge, setShowDailyChallenge] = useState(false)
@@ -979,14 +478,6 @@ function App() {
   const [showAddTask, setShowAddTask] = useState(false)
   const [showDisciplineBeast, setShowDisciplineBeast] = useState(false)
   const [focusUpdating, setFocusUpdating] = useState(false)
-  const [leaderboardLoading, setLeaderboardLoading] = useState(false)
-  const [prestigeLoading, setPrestigeLoading] = useState(false)
-  const [leaderboardPeriod, setLeaderboardPeriod] = useState('weekly')
-  const [leaderboardNowMs, setLeaderboardNowMs] = useState(Date.now())
-  const [totalPlayers, setTotalPlayers] = useState(0)
-  const [yourRank, setYourRank] = useState(null)
-  const [prestigeMeta, setPrestigeMeta] = useState({ total: 0, yourRank: null })
-  const [selectedPrestigeEntry, setSelectedPrestigeEntry] = useState(null)
   const [profileVaultOpen, setProfileVaultOpen] = useState(false)
   const [warModeSelection, setWarModeSelection] = useState('')
   const [warModeSessionId, setWarModeSessionId] = useState('')
@@ -1122,18 +613,6 @@ function App() {
     const dayNumber = Math.floor(Date.now() / 86400000)
     return DAILY_TRAINING_GAMES[dayNumber % DAILY_TRAINING_GAMES.length]
   }, [])
-  const leaderboardXpForPeriod = (entry) => (leaderboardPeriod === 'weekly' ? (entry?.weekly_xp || 0) : (entry?.xp || 0))
-  const currentUserLeaderboardEntry = leaderboardEntries.find((entry) => entry.is_current_user)
-  const secondPlaceEntry = leaderboardEntries.find((entry) => entry.rank === 2)
-  const leaderboardChaseGap = (currentUserLeaderboardEntry && secondPlaceEntry)
-    ? Math.max(0, leaderboardXpForPeriod(currentUserLeaderboardEntry) - leaderboardXpForPeriod(secondPlaceEntry))
-    : 0
-  const showLeaderboardChaseWarning = Boolean(
-    currentUserLeaderboardEntry
-    && currentUserLeaderboardEntry.rank === 1
-    && secondPlaceEntry
-    && leaderboardChaseGap <= LEADERBOARD_CHASE_WARNING_XP,
-  )
   const shieldUsedToday = Boolean(user?.shield_used_today)
   const streakCompletedToday = Boolean(user?.last_active_date) && user.last_active_date === getTodayStorageKeyDate()
   const shieldBannerStorageKey = user?.id
@@ -1252,11 +731,6 @@ function App() {
 
     if (normalizedPath === '/journal') {
       setActiveTab('Journal')
-      return
-    }
-
-    if (normalizedPath === '/leaderboard') {
-      setActiveTab('Leaderboard')
       return
     }
 
@@ -1588,7 +1062,7 @@ function App() {
   useEffect(() => {
     async function loadPublicSocialProof() {
       try {
-        const leaderboard = await fetch(apiUrl('/api/leaderboard/?limit=1'))
+        const leaderboard = await fetch(apiUrl('/api/active-count/'))
         const data = await readApiPayload(leaderboard)
         if (!leaderboard.ok) {
           return
@@ -1602,58 +1076,6 @@ function App() {
 
     loadPublicSocialProof()
   }, [])
-
-  useEffect(() => {
-    if (activeTab !== 'Leaderboard' || !user) {
-      return
-    }
-
-    async function loadLeaderboard() {
-      if (leaderboardPeriod === 'prestige') {
-        setPrestigeLoading(true)
-        try {
-          const leaderboard = await authedFetch('/api/leaderboard/prestige/?limit=50')
-          setPrestigeEntries(leaderboard.entries || [])
-          setPrestigeMeta({
-            total: leaderboard.total || 0,
-            yourRank: leaderboard.your_rank || null,
-          })
-        } catch (error) {
-          console.error('Failed to load prestige leaderboard:', error)
-        } finally {
-          setPrestigeLoading(false)
-        }
-        return
-      }
-
-      setLeaderboardLoading(true)
-      try {
-        const leaderboard = await authedFetch(`/api/leaderboard/?limit=30&period=${leaderboardPeriod}`)
-        setLeaderboardEntries(leaderboard.top_users || leaderboard.entries || [])
-        setTotalPlayers(leaderboard.total_users || 0)
-        setYourRank(leaderboard.your_rank || leaderboard.current_user_rank?.rank || null)
-      } catch (error) {
-        console.error('Failed to load leaderboard:', error)
-      } finally {
-        setLeaderboardLoading(false)
-      }
-    }
-
-    loadLeaderboard()
-  }, [activeTab, user, leaderboardPeriod])
-
-  useEffect(() => {
-    if (activeTab !== 'Leaderboard' || leaderboardPeriod !== 'weekly') {
-      return
-    }
-
-    setLeaderboardNowMs(Date.now())
-    const interval = window.setInterval(() => {
-      setLeaderboardNowMs(Date.now())
-    }, 60000)
-
-    return () => window.clearInterval(interval)
-  }, [activeTab, leaderboardPeriod])
 
   useEffect(() => {
     if (gameRoute !== '/game/war-mode/timer' || !warModeEndAt || !warModeSessionId) {
@@ -1913,10 +1335,7 @@ function App() {
         setActiveTab('Journal')
         return
       }
-      if (path === '/leaderboard') {
-        setActiveTab('Leaderboard')
-        return
-      }
+
       if (path === '/profile') {
         setActiveTab('Profile')
         return
@@ -2327,7 +1746,6 @@ function App() {
     setLevel(1)
     setXp(0)
     setStreakDays(0)
-    setLeaderboardEntries([])
     setGameRemainingXpByType({})
     setTotalPlayers(0)
     setYourRank(null)
@@ -3539,6 +2957,7 @@ function App() {
           location.pathname.includes('/exercises') ? 'exercises' :
           location.pathname.includes('/programs') ? 'programs' :
           location.pathname.includes('/groups') ? 'groups' :
+          location.pathname.includes('/leaderboard') ? 'leaderboard' :
           location.pathname.includes('/clients') ? 'clients' : 'dashboard'
         }
         onNavigate={(key) => {
@@ -3546,12 +2965,14 @@ function App() {
           else if (key === 'groups') reactRouterNavigate('/coach/groups')
           else if (key === 'exercises') reactRouterNavigate('/coach/exercises')
           else if (key === 'programs') reactRouterNavigate('/coach/programs')
+          else if (key === 'leaderboard') reactRouterNavigate('/coach/leaderboard')
         }}
       >
         <Routes>
           <Route path="/coach/exercises" element={<CoachExerciseLibraryPage authedFetch={authedFetch} />} />
           <Route path="/coach/programs/:id" element={<CoachProgramBuilderPage authedFetch={authedFetch} />} />
           <Route path="/coach/programs" element={<CoachProgramsPage authedFetch={authedFetch} />} />
+          <Route path="/coach/leaderboard" element={<CoachLeaderboardPage authedFetch={authedFetch} />} />
           
           <Route path="/coach/groups" element={<CoachGroupsPage authedFetch={authedFetch} />} />
           <Route path="/coach/clients/:id" element={<CoachClientDetailPage authedFetch={authedFetch} />} />
@@ -3935,7 +3356,6 @@ function App() {
     if (tab === 'Home') { navigate('/'); return }
     if (tab === 'Workout') { navigate('/workout'); return }
     if (tab === 'Journal') { navigate('/journal'); return }
-    if (tab === 'Leaderboard') { navigate('/leaderboard'); return }
     if (tab === 'Profile') { navigate('/profile') }
   }
 
@@ -3983,440 +3403,7 @@ function App() {
       ) : null}
 
       {!requiresNameSetup && (
-      activeTab === 'Leaderboard' ? (
-        <section className="space-y-4">
-          <div className="text-center pt-2">
-            <h2 className="text-4xl font-black leading-tight tracking-tighter text-zinc-950">Leaderboard</h2>
-            <p className="mt-2 text-xs font-bold uppercase tracking-widest text-zinc-400">{interpolate(branding.copyPack.leaderboardCopy.header, { count: totalPlayers })}</p>
-            <p className="mt-2 text-[10px] lg:text-xs font-black uppercase tracking-[0.22em] text-zinc-500">
-              {leaderboardPeriod === 'weekly'
-                ? getWeeklyResetCountdownLabel(leaderboardNowMs)
-                : leaderboardPeriod === 'all_time'
-                  ? branding.copyPack.leaderboardCopy.allTimeTab
-                  : branding.copyPack.leaderboardCopy.hallOfLegendsTab}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 rounded-2xl border border-zinc-200 bg-white p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setLeaderboardPeriod('weekly')}
-              className={`rounded-xl px-3 py-2 text-xs font-black uppercase tracking-widest transition ${leaderboardPeriod === 'weekly' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}
-            >
-              Weekly
-            </button>
-            <button
-              type="button"
-              onClick={() => setLeaderboardPeriod('all_time')}
-              className={`rounded-xl px-3 py-2 text-xs font-black uppercase tracking-widest transition ${leaderboardPeriod === 'all_time' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}
-            >
-              All-Time
-            </button>
-            <button
-              type="button"
-              onClick={() => setLeaderboardPeriod('prestige')}
-              className={`rounded-xl px-3 py-2 text-xs font-black uppercase tracking-widest transition ${leaderboardPeriod === 'prestige' ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}
-            >
-              Prestige
-            </button>
-          </div>
-
-          {leaderboardPeriod === 'prestige' ? (
-            <div style={{ position: 'relative' }}>
-              <div style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 0,
-                pointerEvents: 'none',
-                overflow: 'hidden',
-              }}>
-                <PrestigeParticles />
-              </div>
-
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <div style={{
-                  borderRadius: 18,
-                  marginBottom: 20,
-                  padding: '18px 20px',
-                  background: 'linear-gradient(135deg, #0f0800, #0a0014, #000e18)',
-                  border: '0.5px solid #2a1a00',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}>
-                  <div style={{
-                    position: 'absolute',
-                    top: -40,
-                    right: -40,
-                    width: 180,
-                    height: 180,
-                    borderRadius: '50%',
-                    background: 'radial-gradient(circle, #f9731611, transparent 70%)',
-                    pointerEvents: 'none',
-                  }} />
-                  <div style={{
-                    position: 'absolute',
-                    bottom: -30,
-                    left: -30,
-                    width: 140,
-                    height: 140,
-                    borderRadius: '50%',
-                    background: 'radial-gradient(circle, #a855f711, transparent 70%)',
-                    pointerEvents: 'none',
-                  }} />
-
-                  <div style={{ position: 'relative', zIndex: 1 }}>
-                    <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.3em', textTransform: 'uppercase', color: '#52525b' }}>
-                      {branding.copyPack.leaderboardCopy.rarestBoard}
-                    </p>
-                    <p style={{ margin: '0 0 12px', fontSize: 13, color: '#71717a', lineHeight: 1.7 }}>
-                      {interpolate(branding.copyPack.leaderboardCopy.rarestBoardDesc, { streakUnitLabelPlural: branding.copyPack.streakUnitLabelPlural })}
-                    </p>
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                      {Object.entries(PRESTIGE_COLORS).map(([lvl, c]) => (
-                        <div key={lvl} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: c.ring, boxShadow: `0 0 6px ${c.glow}` }} />
-                          <span style={{ fontSize: 10, color: '#52525b' }}>Ψ{lvl} {c.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {prestigeLoading ? (
-                  <div style={{ textAlign: 'center', padding: '60px 0' }}>
-                    <div style={{
-                      width: 48,
-                      height: 48,
-                      margin: '0 auto 16px',
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #f97316, #a855f7)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      animation: 'spin 1.2s linear infinite',
-                    }}>
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#09090b' }} />
-                    </div>
-                    <p style={{ fontSize: 12, color: '#52525b', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-                      Consulting the Hall...
-                    </p>
-                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                  </div>
-                ) : prestigeEntries.length === 0 ? (
-                  <PrestigeEmpty currentLevel={level} />
-                ) : (
-                  <div>
-                    {prestigeEntries.length > 0 ? <PrestigeHero entry={prestigeEntries[0]} /> : null}
-
-                    {prestigeEntries.slice(1).map((entry, i) => (
-                      <PrestigeCard
-                        key={entry.user_id}
-                        entry={entry}
-                        rank={i + 2}
-                        isCurrentUser={entry.is_current_user}
-                        onClick={setSelectedPrestigeEntry}
-                      />
-                    ))}
-
-                    {prestigeMeta.yourRank && !prestigeEntries.find((entry) => entry.is_current_user) ? (
-                      <div style={{
-                        marginTop: 16,
-                        background: '#18181b',
-                        border: '0.5px solid #27272a',
-                        borderRadius: 12,
-                        padding: '12px 16px',
-                        textAlign: 'center',
-                      }}>
-                        <p style={{ margin: 0, fontSize: 12, color: '#52525b' }}>
-                          You are ranked <span style={{ color: '#f4f4f5', fontWeight: 700 }}>#{prestigeMeta.yourRank}</span> on the prestige board
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
-                {!prestigeLoading ? (
-                  <div style={{
-                    marginTop: 24,
-                    background: 'linear-gradient(135deg, #0f0800, #0a0014)',
-                    border: '0.5px solid #1e1200',
-                    borderRadius: 16,
-                    padding: '16px 18px',
-                    textAlign: 'center',
-                  }}>
-                    {level >= 20 ? (
-                      <>
-                        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#fed7aa' }}>
-                          {branding.copyPack.leaderboardCopy.prestigeEligible}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 11, color: '#52525b' }}>
-                          {branding.copyPack.leaderboardCopy.prestigeEligibleDesc}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#3f3f46' }}>
-                          {branding.copyPack.leaderboardCopy.prestigeNotEligible}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 11, color: '#27272a' }}>
-                          Current: Level {level} — {Math.max(0, 20 - level)} levels to go
-                        </p>
-                        <div style={{ marginTop: 10, height: 3, background: '#1c1917', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{
-                            height: '100%',
-                            borderRadius: 4,
-                            background: 'linear-gradient(90deg, #f97316, #a855f7)',
-                            width: `${Math.min(100, (level / 20) * 100)}%`,
-                            transition: 'width 0.8s ease',
-                          }} />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-2xl border border-zinc-900 bg-zinc-900 p-4 text-white shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-300">Total Players</p>
-                    <h3 className="mt-1 text-2xl font-black">{totalPlayers}</h3>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-300">Your Rank</p>
-                    <h3 className="mt-1 text-2xl font-black">{yourRank ? `#${yourRank}` : '—'}</h3>
-                  </div>
-                </div>
-                {showLeaderboardChaseWarning ? (
-                  <p className="mt-3 text-xs font-semibold text-amber-300">
-                    ⚠️ {secondPlaceEntry.name || 'A player'} is {leaderboardChaseGap} XP behind you. Don't stop.
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-zinc-900">{branding.copyPack.leaderboardCopy.warboardTitle}</h3>
-                {leaderboardEntries[0] ? (
-                  <p className="text-xs font-black text-zinc-500 uppercase tracking-widest">
-                    👑 {leaderboardEntries[0].name || 'Player'}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="space-y-2.5">
-                {leaderboardEntries.map((entry, index) => {
-                  const badge = rankMeta(entry.rank)
-                  const previousEntry = index > 0 ? leaderboardEntries[index - 1] : null
-                  const entryXpValue = leaderboardPeriod === 'weekly'
-                    ? (entry.weekly_xp || 0)
-                    : (entry.xp || 0)
-                  const previousXpValue = previousEntry
-                    ? (leaderboardPeriod === 'weekly' ? (previousEntry.weekly_xp || 0) : (previousEntry.xp || 0))
-                    : 0
-                  const xpGapToAbove = previousEntry ? Math.max(0, previousXpValue - entryXpValue) : 0
-                  const isDangerCloseGap = previousEntry ? xpGapToAbove < 50 : false
-                  const aboveName = previousEntry?.is_current_user
-                    ? 'you'
-                    : (previousEntry?.name || 'the player above')
-                  const rankChangeValue = leaderboardPeriod === 'weekly' ? (entry.rank_change ?? 0) : null
-                  const rankChangeLabel = rankChangeValue === null
-                    ? ''
-                    : rankChangeValue > 0
-                      ? `↑${rankChangeValue}`
-                      : rankChangeValue < 0
-                        ? `↓${Math.abs(rankChangeValue)}`
-                        : '—'
-                  const rankChangeClass = rankChangeValue === null
-                    ? ''
-                    : rankChangeValue > 0
-                      ? 'text-emerald-600'
-                      : rankChangeValue < 0
-                        ? 'text-red-600'
-                        : 'text-zinc-400'
-
-                  return (
-                    <div
-                      key={entry.user_id}
-                      className={`rounded-2xl border px-3 py-3 transition ${entry.is_current_user ? 'border-zinc-900 bg-zinc-100' : 'border-zinc-200 bg-white'}`}
-                    >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <span className={`inline-flex min-w-[68px] items-center justify-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${badge.className}`}>
-                          <span>#{entry.rank || index + 1}</span>
-                          {badge.icon ? <span>{badge.icon}</span> : null}
-                        </span>
-                        <div>
-                          <p className="text-sm font-bold text-zinc-900">
-                            {entry.name || 'Player'}
-                            {entry.is_current_user ? ' (You)' : ''}
-                            {entry.equipped_artifact ? (
-                              <span
-                                className="ml-1 inline-flex align-middle"
-                                title={entry.equipped_artifact.name || 'Equipped artifact'}
-                              >
-                                <ArtifactIcon
-                                  iconKey={entry.equipped_artifact.icon_key}
-                                  color={entry.equipped_artifact.color_primary}
-                                  size={14}
-                                />
-                              </span>
-                            ) : null}
-                          </p>
-                          <p className="text-[11px] font-semibold text-zinc-500">
-                            <span className={`font-black uppercase ${entry.level >= 30 ? 'text-amber-500' : 'text-zinc-600'}`}>
-                              {getLevelTitle(entry.level)}
-                            </span>
-                            {' '}• 🔥 {entry.streak}
-                            {entry.equipped_badge ? (
-                              <span className="ml-1">{getBadgeIcon(entry.equipped_badge)}</span>
-                            ) : null}
-                          </p>
-                          {previousEntry ? (
-                            <p className={`mt-1 text-[10px] font-bold uppercase tracking-widest ${isDangerCloseGap ? 'text-amber-600' : 'text-zinc-500'}`}>
-                              {xpGapToAbove} XP behind {aboveName} ↑
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-black text-zinc-900">{entryXpValue} XP</p>
-                        {leaderboardPeriod === 'weekly' ? (
-                          <p className={`mt-1 text-xs font-black ${rankChangeClass}`}>{rankChangeLabel}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                    </div>
-                  )
-                })}
-                {!isLoading && leaderboardEntries.length === 0 ? (
-                  <p className="text-sm text-zinc-500">{leaderboardLoading ? 'Loading leaderboard data..' : 'No leaderboard data yet.'}</p>
-                ) : null}
-              </div>
-            </>
-          )}
-
-          {leaderboardPeriod === 'prestige' && selectedPrestigeEntry ? (() => {
-            const entry = selectedPrestigeEntry
-            const pc = PRESTIGE_COLORS[entry.prestige_level] || PRESTIGE_COLORS[1]
-            return (
-              <div
-                onClick={() => setSelectedPrestigeEntry(null)}
-                style={{
-                  position: 'fixed',
-                  inset: 0,
-                  zIndex: 10000,
-                  background: 'rgba(0,0,0,0.85)',
-                  display: 'flex',
-                  alignItems: 'flex-end',
-                  justifyContent: 'center',
-                  padding: 0,
-                  backdropFilter: 'blur(8px)',
-                }}
-              >
-                <div
-                  onClick={(event) => event.stopPropagation()}
-                  style={{
-                    width: '100%',
-                    maxWidth: 440,
-                    background: 'linear-gradient(145deg, #0f0a00, #0c0010)',
-                    border: `1px solid ${pc.ring}44`,
-                    borderRadius: '22px 22px 0 0',
-                    padding: '28px 22px 40px',
-                    boxShadow: `0 -20px 60px ${pc.glow}`,
-                    animation: 'slideUp 0.3s cubic-bezier(0.23,1,0.32,1)',
-                  }}
-                >
-                  <style>{`
-                    @keyframes slideUp {
-                      from { transform: translateY(100%); }
-                      to { transform: translateY(0); }
-                    }
-                  `}</style>
-                  <button
-                    onClick={() => setSelectedPrestigeEntry(null)}
-                    style={{
-                      position: 'absolute',
-                      top: 14,
-                      right: 14,
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#52525b',
-                      cursor: 'pointer',
-                      fontSize: 18,
-                    }}
-                  >
-                    ✕
-                  </button>
-
-                  <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                    <div style={{
-                      width: 80,
-                      height: 80,
-                      margin: '0 auto 12px',
-                      borderRadius: '50%',
-                      background: `radial-gradient(circle at 35% 35%, ${pc.from}55, ${pc.to})`,
-                      border: `2px solid ${pc.ring}77`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: `0 0 24px ${pc.glow}`,
-                    }}>
-                      <PrestigeIcon level={entry.prestige_level} size={44} />
-                    </div>
-                    <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 900, color: '#f4f4f5', fontFamily: "'Georgia', serif" }}>
-                      {entry.name || 'Warrior'}
-                    </h2>
-                    <p style={{ margin: 0, fontSize: 13, color: pc.ring, fontWeight: 700 }}>
-                      Ψ{entry.prestige_level} — {PRESTIGE_ARTIFACT_NAMES[entry.prestige_level]}
-                    </p>
-                  </div>
-
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: 8,
-                    marginBottom: 16,
-                  }}>
-                    {[
-                      { label: 'Prestige', val: `Ψ${entry.prestige_level}` },
-                      { label: 'Level', val: entry.level },
-                      { label: 'Streak', val: `${entry.streak}d` },
-                      { label: 'Total XP', val: (entry.total_xp || entry.xp || 0).toLocaleString() },
-                      { label: 'Season', val: entry.season_label || '—' },
-                      { label: 'Artifact', val: pc.label },
-                    ].map(({ label, val }) => (
-                      <div key={label} style={{
-                        background: '#18181b',
-                        border: '0.5px solid #27272a',
-                        borderRadius: 10,
-                        padding: '10px 12px',
-                        textAlign: 'center',
-                      }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#f4f4f5' }}>{val}</p>
-                        <p style={{ margin: '2px 0 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#52525b' }}>{label}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{
-                    background: '#0c0a09',
-                    border: `0.5px solid ${pc.ring}22`,
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    textAlign: 'center',
-                  }}>
-                    <p style={{ margin: 0, fontSize: 12, color: '#52525b', lineHeight: 1.7, fontStyle: 'italic' }}>
-                      "{PRESTIGE_ARTIFACT_NAMES[entry.prestige_level] ? `Bearer of ${PRESTIGE_ARTIFACT_NAMES[entry.prestige_level]}.` : ''} This warrior burned their progression and chose legacy over comfort."
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )
-          })() : null}
-        </section>
-      ) : activeTab === 'Journal' ? (
+      activeTab === 'Journal' ? (
         <JournalPage
           authedFetch={authedFetch}
           onJournalSaved={() => {

@@ -809,188 +809,37 @@ def get_weekly_leaderboard_window(reference_time=None):
     return week_start, week_end
 
 
-def get_leaderboard(current_user=None, limit=20, period="weekly"):
-    from .models import UserArtifact
-
-    is_weekly = period == "weekly"
-    equipped_artifacts = Prefetch(
-        "user_artifacts",
-        queryset=UserArtifact.objects.select_related("artifact").filter(is_equipped=True),
-        to_attr="equipped_artifacts",
-    )
-    users_query = User.objects.exclude(is_coach=True).annotate(
+def get_coach_leaderboard(coach, group=None, ungrouped=False):
+    """Rank a coach's clients by total XP, optionally filtered by group."""
+    clients = User.objects.filter(coach=coach, is_coach=False).annotate(
         recent_activity=Coalesce("last_active_date", date(1970, 1, 1), output_field=DateField()),
     )
-    users_query = users_query.prefetch_related(equipped_artifacts)
-    previous_rank_by_user_id = {}
 
-    if is_weekly:
-        week_start, week_end = get_weekly_leaderboard_window()
-        today_start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
-        users_query = users_query.annotate(
-            weekly_xp=Coalesce(
-                Sum(
-                    "xp_logs__amount",
-                    filter=Q(
-                        xp_logs__created_at__gte=week_start,
-                        xp_logs__created_at__lt=week_end,
-                        # Exclude negative wager amounts from weekly XP leaderboard
-                        xp_logs__amount__gt=0,
-                    ),
-                ),
-                0,
-            )
-        ).order_by("-weekly_xp", "-streak", "-recent_activity", "created_at")
+    if group is not None:
+        clients = clients.filter(client_group=group)
+    elif ungrouped:
+        clients = clients.filter(client_group__isnull=True)
 
-        previous_users = list(
-            User.objects.exclude(is_coach=True).annotate(
-                recent_activity=Coalesce("last_active_date", date(1970, 1, 1), output_field=DateField()),
-            )
-            .annotate(
-                weekly_xp=Coalesce(
-                    Sum(
-                        "xp_logs__amount",
-                        filter=Q(
-                            xp_logs__created_at__gte=week_start,
-                            xp_logs__created_at__lt=today_start,
-                            xp_logs__amount__gt=0,
-                        ),
-                    ),
-                    0,
-                )
-            )
-            .order_by("-weekly_xp", "-streak", "-recent_activity", "created_at")
-        )
-        previous_rank_by_user_id = {
-            user.id: index
-            for index, user in enumerate(previous_users, start=1)
-        }
-    else:
-        users_query = users_query.order_by("-xp", "-streak", "-recent_activity", "created_at")
-
-    users = list(users_query)
-
-    total_users = len(users)
+    clients = clients.order_by("-xp", "-streak", "-recent_activity", "created_at")
 
     entries = []
-    current_user_rank = None
-    for index, user in enumerate(users, start=1):
-        previous_rank = previous_rank_by_user_id.get(user.id)
-        rank_change = (previous_rank - index) if previous_rank is not None else 0
-
-        equipped_artifact = user.equipped_artifacts[0] if getattr(user, "equipped_artifacts", []) else None
-        equipped_payload = None
-        if equipped_artifact:
-            artifact = equipped_artifact.artifact
-            equipped_payload = {
-                "id": str(artifact.id),
-                "slug": artifact.slug,
-                "name": artifact.name,
-                "icon_key": artifact.icon_key,
-                "rarity": artifact.rarity,
-                "color_primary": artifact.color_primary,
-                "color_secondary": artifact.color_secondary,
-            }
-
-        entry = {
+    for index, client in enumerate(list(clients), start=1):
+        entries.append({
             "rank": index,
-            "user_id": str(user.id),
-            "name": user.name,
-            "email": user.email,
-            "xp": user.xp,
-            "weekly_xp": int(getattr(user, "weekly_xp", 0)) if is_weekly else None,
-            "rank_change": rank_change if is_weekly else None,
-            "level": user.level,
-            "streak": user.streak,
-            "equipped_badge": user.equipped_badge,
-            "equipped_artifact": equipped_payload,
-            "last_active_date": user.last_active_date,
-            "is_current_user": bool(current_user) and user.id == current_user.id,
-        }
+            "user_id": str(client.id),
+            "name": client.name,
+            "xp": client.xp,
+            "level": client.level,
+            "streak": client.streak,
+            "last_active_date": client.last_active_date,
+        })
 
-        if entry["is_current_user"]:
-            current_user_rank = entry
-
-        if len(entries) < limit:
-            entries.append(entry)
-
-    return entries, current_user_rank, total_users
+    return entries
 
 
-def get_prestige_leaderboard(current_user=None, limit=50):
-    from .models import UserArtifact
-
-    equipped_artifacts = Prefetch(
-        "user_artifacts",
-        queryset=UserArtifact.objects.select_related("artifact").filter(is_equipped=True),
-        to_attr="equipped_artifacts",
-    )
-    prestige_artifacts = Prefetch(
-        "user_artifacts",
-        queryset=(
-            UserArtifact.objects.select_related("artifact")
-            .filter(artifact__unlock_condition__startswith="prestige_")
-            .order_by("-earned_at")
-        ),
-        to_attr="prestige_artifacts",
-    )
-
-    users_query = (
-        User.objects.filter(prestige_level__gt=0)
-        .exclude(is_coach=True)
-        .prefetch_related(prestige_artifacts, equipped_artifacts)
-        .annotate(
-            recent_activity=Coalesce(
-                "last_active_date", date(1970, 1, 1), output_field=DateField()
-            ),
-        )
-        .order_by("-prestige_level", "-xp", "-streak", "-recent_activity", "created_at")
-    )
-
-    users = list(users_query)
-    total_users = len(users)
-    entries = []
-    current_user_rank = None
-
-    for index, user in enumerate(users, start=1):
-        prestige_artifact = user.prestige_artifacts[0] if getattr(user, "prestige_artifacts", []) else None
-        equipped_artifact = user.equipped_artifacts[0] if getattr(user, "equipped_artifacts", []) else None
-        equipped_payload = None
-        if equipped_artifact:
-            artifact = equipped_artifact.artifact
-            equipped_payload = {
-                "id": str(artifact.id),
-                "slug": artifact.slug,
-                "name": artifact.name,
-                "icon_key": artifact.icon_key,
-                "rarity": artifact.rarity,
-                "color_primary": artifact.color_primary,
-                "color_secondary": artifact.color_secondary,
-            }
-        entry = {
-            "rank": index,
-            "user_id": str(user.id),
-            "name": user.name,
-            "email": user.email,
-            "xp": user.xp,
-            "total_xp": user.xp,
-            "level": user.level,
-            "streak": user.streak,
-            "prestige_level": user.prestige_level,
-            "equipped_badge": user.equipped_badge,
-            "equipped_artifact": equipped_payload,
-            "season_label": prestige_artifact.season_label if prestige_artifact else "",
-            "last_active_date": user.last_active_date,
-            "is_current_user": bool(current_user) and user.id == current_user.id,
-        }
-
-        if entry["is_current_user"]:
-            current_user_rank = entry
-
-        if len(entries) < limit:
-            entries.append(entry)
-
-    return entries, current_user_rank, total_users
+def get_active_user_count():
+    """Return total count of non-coach users (for social-proof display)."""
+    return User.objects.exclude(is_coach=True).count()
 
 
 def get_weekly_war_report(user, reference_date=None):
@@ -1050,8 +899,35 @@ def get_weekly_war_report(user, reference_date=None):
         date__lte=week_end_date,
     ).count()
 
-    _, current_user_rank, total_users = get_leaderboard(user, limit=200, period="weekly")
-    current_rank = current_user_rank["rank"] if current_user_rank else None
+    # Compute weekly rank inline (count users with more weekly XP + 1)
+    week_start, week_end = get_weekly_leaderboard_window()
+    user_weekly_xp = XPLog.objects.filter(
+        user=user,
+        created_at__gte=week_start,
+        created_at__lt=week_end,
+        amount__gt=0,
+    ).aggregate(total=Coalesce(Sum("amount"), 0))["total"]
+    users_ahead = (
+        User.objects.exclude(is_coach=True)
+        .exclude(id=user.id)
+        .annotate(
+            weekly_xp=Coalesce(
+                Sum(
+                    "xp_logs__amount",
+                    filter=Q(
+                        xp_logs__created_at__gte=week_start,
+                        xp_logs__created_at__lt=week_end,
+                        xp_logs__amount__gt=0,
+                    ),
+                ),
+                0,
+            )
+        )
+        .filter(weekly_xp__gt=user_weekly_xp)
+        .count()
+    )
+    current_rank = users_ahead + 1
+    total_users = User.objects.exclude(is_coach=True).count()
 
     task_score = min(40, round(tasks_this_week / 35 * 40))
     game_score = min(30, round(games_played / 14 * 30))

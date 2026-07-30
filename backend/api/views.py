@@ -32,7 +32,7 @@ from .serializers import (
     GameXPInputSerializer,
     JournalEntryInputSerializer,
     JournalEntrySerializer,
-    LeaderboardQuerySerializer,
+    CoachLeaderboardQuerySerializer,
     ForgotPasswordInputSerializer,
     PushSubscriptionSerializer,
     RegisterInputSerializer,
@@ -67,8 +67,8 @@ from .services import (
     get_daily_tasks,
     CUSTOM_TASK_PREFIX,
     get_game_session,
-    get_leaderboard,
-    get_prestige_leaderboard,
+    get_coach_leaderboard,
+    get_active_user_count,
     get_user_stats,
     grant_streak_shields,
     get_user_task,
@@ -587,7 +587,7 @@ class UpdateFocusCategoryView(APIView):
         serializer.is_valid(raise_exception=True)
 
         new_category = serializer.validated_data["focus_category"]
-        old_category = request.user.focus_category
+        old_category = request.user.focus_category or User.FOCUS_DISCIPLINE
 
         request.user.focus_category = new_category
         request.user.save(update_fields=["focus_category"])
@@ -1129,48 +1129,13 @@ class GameSubmitView(APIView):
         )
 
 
-class LeaderboardView(APIView):
+
+class ActiveUserCountView(APIView):
+    """Lightweight public endpoint for social-proof user count."""
     permission_classes = [AllowAny]
 
     def get(self, request):
-        serializer = LeaderboardQuerySerializer(data=request.query_params)
-        serializer.is_valid(raise_exception=True)
-
-        limit = serializer.validated_data.get("limit", 20)
-        period = serializer.validated_data.get("period", "weekly")
-        current_user = request.user if request.user.is_authenticated else None
-        entries, current_user_rank, total_users = get_leaderboard(current_user, limit, period)
-        return Response(
-            {
-                "period": period,
-                "total_users": total_users,
-                "your_rank": current_user_rank["rank"] if current_user_rank else None,
-                "top_users": entries,
-                "entries": entries,
-                "current_user_rank": current_user_rank,
-            }
-        )
-
-
-class PrestigeLeaderboardView(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        try:
-            limit = int(request.query_params.get("limit", 50))
-        except (TypeError, ValueError):
-            limit = 50
-        limit = max(1, min(limit, 100))
-
-        current_user = request.user if request.user.is_authenticated else None
-        entries, current_user_rank, total_users = get_prestige_leaderboard(current_user, limit)
-        return Response(
-            {
-                "total": total_users,
-                "your_rank": current_user_rank["rank"] if current_user_rank else None,
-                "entries": entries,
-            }
-        )
+        return Response({"total_users": get_active_user_count()})
 
 
 class JournalView(APIView):
@@ -2709,4 +2674,53 @@ class CoachClientMetricPhotosView(APIView):
 
         return Response({
             "photos": ProgressPhotoSerializer(photos, many=True, context={"request": request}).data,
+        })
+
+
+class CoachLeaderboardView(APIView):
+    """Coach-only leaderboard: ranks the coach's clients by total XP."""
+    permission_classes = [IsCoach]
+
+    def get(self, request):
+        from .models import ClientGroup
+
+        serializer = CoachLeaderboardQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+
+        scope = serializer.validated_data.get("scope", "all_time")
+        group_id = serializer.validated_data.get("group_id", "")
+
+        group = None
+        ungrouped = False
+
+        if scope == "group":
+            if group_id == "ungrouped":
+                ungrouped = True
+            elif group_id:
+                try:
+                    group = ClientGroup.objects.get(id=group_id, coach=request.user)
+                except (ClientGroup.DoesNotExist, ValueError):
+                    return Response(
+                        {"detail": "Group not found."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+        entries = get_coach_leaderboard(
+            coach=request.user, group=group, ungrouped=ungrouped,
+        )
+
+        # Include the coach's groups for the frontend group picker
+        groups = list(
+            ClientGroup.objects.filter(coach=request.user)
+            .order_by("name")
+            .values("id", "name")
+        )
+        # Convert UUID to string for JSON
+        for g in groups:
+            g["id"] = str(g["id"])
+
+        return Response({
+            "scope": scope,
+            "entries": entries,
+            "groups": groups,
         })
