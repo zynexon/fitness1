@@ -76,7 +76,7 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
         })
       }
       setDayModal({ open: false })
-      fetchProgram()
+      fetchData()
     } catch (err) {
       showAlert('Error', err.message || 'Error saving day.')
     } finally {
@@ -92,7 +92,7 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
     setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })
     try {
       await authedFetch(`/api/coach/programs/${id}/days/${dayId}/`, { method: 'DELETE' })
-      fetchProgram()
+      fetchData()
     } catch (err) {
       showAlert('Error', err.message || 'Error deleting day.')
     }
@@ -138,7 +138,7 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
         })
       }
       setExerciseModal({ open: false })
-      fetchProgram()
+      fetchData()
     } catch (err) {
       showAlert('Error', err.message || 'Error saving exercise.')
     } finally {
@@ -154,7 +154,7 @@ export default function CoachProgramBuilderPage({ authedFetch }) {
     setConfirmConfig({ open: false, title: '', message: '', onConfirm: null })
     try {
       await authedFetch(`/api/coach/programs/${id}/days/${dayId}/exercises/${prescribedExId}/`, { method: 'DELETE' })
-      fetchProgram()
+      fetchData()
     } catch (err) {
       showAlert('Error', err.message || 'Error removing exercise.')
     }
